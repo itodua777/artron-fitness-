@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  branches  Branch[]
+}
+
+model Branch {
+  id          String       @id @default(uuid())
+  name        String
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  departments Department[]
+  users       User[]
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  roles     Role[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String
+  departmentId String
+  department  Department   @relation(fields: [departmentId], references: [id])
+  permissions Permission[]
+  users       User[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  action      String   // e.g. "read", "create", "manage"
+  subject     String   // e.g. "User", "Client", "all"
+  conditions  Json?    // CASL conditions
+  fields      Json?    // Permitted fields (or excluded fields if inverted?) - CASL uses fields for "can read only these fields"
+  inverted    Boolean  @default(false) // e.g. "cannot"
+  reason      String?  // Optional explanation
+  roleId      String
+  role        Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  
+  firstName String
+  lastName  String
+  phone     String?
+  
+  // Relations
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  
+  roleId    String?
+  role      Role?    @relation(fields: [roleId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
