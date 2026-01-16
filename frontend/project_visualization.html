@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artron Project Structure Visualization</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+    </script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; background-color: #f9f9f9; }
+        h1, h2, h3 { color: #333; }
+        .diagram-container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 30px; overflow-x: auto; }
+        .description { margin-bottom: 10px; color: #666; }
+        .legend { font-size: 0.9em; border-left: 4px solid #0070f3; padding-left: 10px; margin: 10px 0; background: #e6f1fe; padding: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>Artron Project Structure & Dependencies</h1>
+    <p>This page visualizes the architecture and component connections of the Artron project.</p>
+
+    <h2>1. High-Level Architecture</h2>
+    <div class="description">Overview of the monorepo-like structure showing the relationship between Next.js Frontend, NestJS Backend, and Configuration.</div>
+    <div class="diagram-container">
+        <pre class="mermaid">
+graph TD
+    Root[Project Root]
+    Root --> Frontend[Frontend (Next.js)]
+    Root --> Backend[Backend (NestJS)]
+    Root --> Legacy[Legacy (_backup_vite)]
+    Root --> Config[Root Configs]
+
+    Frontend --> App[app/ (App Router)]
+    Frontend --> Components[components/]
+    Frontend --> Public[public/]
+    
+    Backend --> Src[server/src/]
+    Backend --> Db[Database (MongoDB)]
+    
+    Config --> Pkg[package.json]
+    Config --> TS[tsconfig.json]
+    Config --> Types[types.ts (Root)]
+
+    subgraph "Data Flow"
+        App -- API Calls --> Backend
+        App -. Shared Types .-> Types
+        Src -. Shared Types .-> Types
+    end
+    
+    style Root fill:#f9f,stroke:#333,stroke-width:2px
+    style Frontend fill:#d4f1f4,stroke:#333
+    style Backend fill:#e2f0cb,stroke:#333
+        </pre>
+    </div>
+
+    <h2>2. Component Connections & Dependencies</h2>
+    <div class="description">Detailed view of how specific Frontend Pages connect to Backend Modules.</div>
+    <div class="diagram-container">
+         <pre class="mermaid">
+graph LR
+    subgraph Frontend Pages
+        Login[Login Page]
+        Dash[Dashboard]
+        Users[User List/Add]
+        Settings[Settings Page]
+        Pass[Pass Management]
+    end
+
+    subgraph Backend Modules
+        AuthMod[Auth Module]
+        UserMod[User Module]
+        MemberMod[Members Module]
+        PassMod[Passes Module]
+        TenantMod[Tenants Module]
+    end
+
+    Login --> AuthMod
+    Dash --> Unk[Aggregated Stats]
+    Users --> UserMod
+    Users --> MemberMod
+    Pass --> PassMod
+    Settings --> TenantMod
+
+    style Login fill:#ffecb3
+    style AuthMod fill:#ffccbc
+         </pre>
+    </div>
+
+    <h2>3. Critical Impact Analysis</h2>
+    <div class="legend">
+        <strong>Types Vulnerability:</strong> The <code>types.ts</code> file is duplicated in Root and App. Changes in one MUST be mirrored in the other to avoid silent failures.
+    </div>
+
+</body>
+</html>

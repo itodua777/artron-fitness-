@@ -1,0 +1,8 @@
+{
+  "/(main)/passes/library/page": "app/(main)/passes/library/page.js",
+  "/(main)/users/page": "app/(main)/users/page.js",
+  "/(main)/corporate/page": "app/(main)/corporate/page.js",
+  "/(main)/settings/page": "app/(main)/settings/page.js",
+  "/(main)/users/[id]/page": "app/(main)/users/[id]/page.js",
+  "/(main)/users/add/page": "app/(main)/users/add/page.js"
+}
