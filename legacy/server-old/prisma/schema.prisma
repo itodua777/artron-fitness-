@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tenant {
+  id            String   @id @default(uuid())
+  name          String
+  brandName     String?
+  address       String?
+  contactEmail  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  users         User[]
+  members       Member[]
+  passes        Pass[]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String?
+  role      String   @default("ADMIN") // ADMIN, STAFF, SUPERADMIN
+  
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lead {
+  id        Int      @id @default(autoincrement())
+  email     String
+  source    String?
+  createdAt DateTime @default(now())
+}
+
+model CompanyRegistration {
+  id            Int      @id @default(autoincrement())
+  brandName     String
+  activityField String
+  companyName   String
+  legalAddress  String
+  identCode     String
+  directorName  String
+  directorId    String
+  gmName        String
+  gmEmail       String
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt     DateTime @default(now())
+}
+
+model Member {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String?
+  phone       String?
+  personalId  String?
+  address     String?
+  status      String   @default("Active")
+  joinedDate  String?  
+  isCorporate Boolean  @default(false)
+  companyName String?
+  
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  // Group Info
+  groupId     String?
+  groupType   String?  // Family, Couple, Friends
+  
+  // Media
+  photo       String?  // Base64 or URL
+  idCard      String?  // Base64 or URL
+  healthCert  String?  // Base64 or URL
+  birthCert   String?  // Base64 or URL (for minors)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Pass {
+  id          String   @id @default(uuid())
+  title       String
+  price       Float
+  duration    Int
+  description String?
+  features    String?
+  active      Boolean  @default(true)
+  
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
