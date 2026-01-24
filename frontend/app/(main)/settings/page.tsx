@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
     Globe,
     Check,
@@ -23,6 +23,8 @@ import {
     Construction,
     X,
     DoorOpen,
+
+    MessageSquare,
     Binary,
     Upload,
     FileImage,
@@ -68,7 +70,9 @@ import {
     Pencil,
     GripVertical,
     ArrowRight as ArrowRightIcon,
-    ArrowLeft as ArrowLeftIcon
+    ArrowLeft as ArrowLeftIcon,
+    User,
+    Link
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import SignatureModal from '../../../components/settings/SignatureModal';
@@ -116,6 +120,7 @@ interface InventoryItem {
     name: string;
     description: string;
     quantity: number;
+    inUse?: number;
 }
 
 const PREDEFINED_EQUIPMENT = [
@@ -314,6 +319,18 @@ const InventoryItemRow = ({ item, updateItem, deleteItem }: { item: InventoryIte
                     <button onClick={() => updateItem(item.id, 'quantity', item.quantity + 1)} className="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"><Plus size={14} /></button>
                 </div>
             </td>
+            <td className="py-4 text-center">
+                <div className="flex items-center justify-center space-x-2">
+                    <button onClick={() => updateItem(item.id, 'inUse', Math.max(0, (item.inUse || 0) - 1))} className="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-emerald-600 transition-colors"><Minus size={14} /></button>
+                    <span className="w-8 text-center text-sm font-black text-emerald-600">{item.inUse || 0}</span>
+                    <button onClick={() => updateItem(item.id, 'inUse', Math.min(item.quantity, (item.inUse || 0) + 1))} className="p-1 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-emerald-600 transition-colors"><Plus size={14} /></button>
+                </div>
+            </td>
+            <td className="py-4 text-center">
+                <span className={`text-sm font-black ${(item.quantity - (item.inUse || 0)) > 0 ? 'text-slate-500' : 'text-slate-200'}`}>
+                    {Math.max(0, item.quantity - (item.inUse || 0))}
+                </span>
+            </td>
             <td className="py-4 text-right pr-4">
                 <button onClick={() => deleteItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
                     <Trash2 size={18} />
@@ -362,6 +379,31 @@ interface Department {
     isExpanded?: boolean; // For UI toggle
 }
 
+interface Branch {
+    id: string;
+    name: string;
+    address: string;
+    email: string;
+    phone: string;
+    managerName?: string;
+    managerEmail?: string;
+    managerPhone?: string;
+    credentials?: { user: string; pass: string };
+
+    // Branch Specific Settings
+    rooms?: Room[];
+    inventoryItems?: { id: number; name: string; description: string; quantity: number }[];
+    bankAccounts?: BankAccount[];
+    socialLinks?: {
+        facebook?: string;
+        instagram?: string;
+        linkedin?: string;
+        tiktok?: string;
+        youtube?: string;
+        website?: string;
+    };
+}
+
 interface CompanyProfile {
     name: string;
     identCode: string;
@@ -373,8 +415,9 @@ interface CompanyProfile {
     directorEmail: string;
     activityField: string;
     brandName: string;
+    slogan: string;
     logo: string | null;
-    branches: string[];
+    branches: Branch[];
     gmName: string;
     gmId: string;
     gmPhone: string;
@@ -394,6 +437,7 @@ interface CompanyProfile {
     directorSignature?: string;
     gmSignature?: string;
     bankAccounts?: BankAccount[];
+    hasBranches?: boolean;
 }
 
 interface BankAccount {
@@ -403,7 +447,17 @@ interface BankAccount {
     iban: string;
     recipientName: string;
     isDefault: boolean;
+    purposes?: string[]; // 'INVOICE', 'APP', 'TERMINAL', 'SALARY', 'UTILITIES', 'OTHER'
 }
+
+const ACCOUNT_USAGES = [
+    { key: 'INVOICE', label: 'ინვოისები' },
+    { key: 'APP', label: 'მობილური აპლიკაცია' },
+    { key: 'TERMINAL', label: 'ტერმინალი' },
+    { key: 'SALARY', label: 'ხელფასები' },
+    { key: 'UTILITIES', label: 'კომუნალურები' },
+    { key: 'OTHER', label: 'სხვა' }
+];
 
 // Helper component for Sortable Item
 const SortableDepartmentItem = ({
@@ -565,7 +619,7 @@ const defaultPermissions: Permissions = {
 
 export default function SettingsPage() {
     const { language, setLanguage, t } = useLanguage();
-    const [activeSubView, setActiveSubView] = useState<'MAIN' | 'MODELING' | 'COMPANY' | 'DIGITAL' | 'BANK' | 'STRUCTURE' | 'INSTRUCTIONS' | 'BUILDER' | 'INVENTORY'>('MAIN');
+    const [activeSubView, setActiveSubView] = useState<'MAIN' | 'MODELING' | 'COMPANY' | 'DIGITAL' | 'BANK' | 'STRUCTURE' | 'INSTRUCTIONS' | 'BUILDER' | 'INVENTORY' | 'BRANCHES'>('MAIN');
     const [onboardingStep, setOnboardingStep] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('artron_setup_flow_step');
@@ -590,7 +644,7 @@ export default function SettingsPage() {
         };
     });
     const [headerConfig, setHeaderConfig] = useState(() => {
-        const defaults = { showLogin: false, showBookmark: false, showSearch: false, showAlert: false };
+        const defaults = { showLogin: false, showBookmark: false, showSearch: false, showAlert: false, showControlPanel: true };
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('artron_header_config');
             if (saved) {
@@ -604,6 +658,20 @@ export default function SettingsPage() {
         return defaults;
     });
     const [hasGM, setHasGM] = useState(false);
+    const [hasBranches, setHasBranches] = useState(false);
+    const [isGMModalOpen, setIsGMModalOpen] = useState(false);
+
+    const handleGMToggle = (checked: boolean) => {
+        if (checked) {
+            setIsGMModalOpen(true);
+            setHasGM(true);
+        } else {
+            setHasGM(false);
+            setCompany(prev => ({ ...prev, gmName: '', gmId: '', gmPhone: '', gmEmail: '', gmFullAccess: false }));
+        }
+    };
+
+
 
     useEffect(() => {
         localStorage.setItem('artron_setup_flow_step', onboardingStep.toString());
@@ -875,22 +943,49 @@ export default function SettingsPage() {
     const [rooms, setRooms] = useState<Room[]>([]);
 
     // --- Inventory State ---
-    const [inventoryItems, setInventoryItems] = useState<{ id: number; name: string; description: string; quantity: number }[]>([
-        { id: 1, name: 'სარბენი ბილიკი', description: 'Technogym Run Excite 700', quantity: 12 },
-        { id: 2, name: 'ჰანტელების ნაკრები', description: '5kg - 50kg, რეზინირებული', quantity: 4 },
-        { id: 3, name: 'ელიპტიკური ტრენაჟორი', description: 'Life Fitness Cross-Trainer', quantity: 8 },
+    const [inventoryItems, setInventoryItems] = useState<{ id: number; name: string; description: string; quantity: number, inUse: number }[]>([
+        { id: 1, name: 'სარბენი ბილიკი', description: 'Technogym Run Excite 700', quantity: 12, inUse: 12 },
+        { id: 2, name: 'ჰანტელების ნაკრები', description: '5kg - 50kg, რეზინირებული', quantity: 4, inUse: 4 },
+        { id: 3, name: 'ელიპტიკური ტრენაჟორი', description: 'Life Fitness Cross-Trainer', quantity: 8, inUse: 6 },
     ]);
 
     const addInventoryItem = () => {
-        setInventoryItems([...inventoryItems, { id: Date.now(), name: '', description: '', quantity: 1 }]);
+        const newItem = { id: Date.now(), name: '', description: '', quantity: 1, inUse: 0 };
+        const newItems = [...inventoryItems, newItem];
+        setInventoryItems(newItems);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, inventoryItems: newItems } : b)
+            }));
+        }
     };
 
+    // ... (updateInventoryItem and deleteInventoryItem remain same logic, just pass through)
+
     const updateInventoryItem = (id: number, field: string, value: any) => {
-        setInventoryItems(inventoryItems.map(item => item.id === id ? { ...item, [field]: value } : item));
+        const newItems = inventoryItems.map(item => item.id === id ? { ...item, [field]: value } : item);
+        setInventoryItems(newItems);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, inventoryItems: newItems } : b)
+            }));
+        }
     };
 
     const deleteInventoryItem = (id: number) => {
-        setInventoryItems(inventoryItems.filter(item => item.id !== id));
+        const newItems = inventoryItems.filter(item => item.id !== id);
+        setInventoryItems(newItems);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, inventoryItems: newItems } : b)
+            }));
+        }
     };
 
     // --- Gym Modeling Handlers ---
@@ -916,33 +1011,155 @@ export default function SettingsPage() {
             area: 0,
             type
         };
-        setRooms([...rooms, newRoom]);
+        const newRooms = [...rooms, newRoom];
+        setRooms(newRooms);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, rooms: newRooms } : b)
+            }));
+        }
     };
 
     const updateRoom = (id: string, field: keyof Room, value: any) => {
-        setRooms(rooms.map(r => r.id === id ? { ...r, [field]: value } : r));
+        const newRooms = rooms.map(r => r.id === id ? { ...r, [field]: value } : r);
+        setRooms(newRooms);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, rooms: newRooms } : b)
+            }));
+        }
     };
 
     const deleteRoom = (id: string) => {
-        setRooms(rooms.filter(r => r.id !== id));
+        const newRooms = rooms.filter(r => r.id !== id);
+        setRooms(newRooms);
+
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, rooms: newRooms } : b)
+            }));
+        }
     };
 
     // --- Company Profile State ---
     const [editingBankIds, setEditingBankIds] = useState<Set<string>>(new Set());
     const [company, setCompany] = useState<CompanyProfile>({
         name: '', identCode: '', legalAddress: '', actualAddress: '', directorName: '', directorId: '',
-        directorPhone: '', directorEmail: '', activityField: '', brandName: '', logo: null, branches: [],
+        directorPhone: '', directorEmail: '', activityField: '', brandName: '', slogan: '', logo: null, branches: [],
         gmName: '', gmId: '', gmPhone: '', gmEmail: '', gmFullAccess: false, companyEmail: '',
         companyPhone: '', facebookLink: '', instagramLink: '', tiktokLink: '', youtubeLink: '',
         linkedinLink: '', bankName: '', bankIban: '', bankSwift: '', recipientName: '',
-        directorSignature: '', gmSignature: '', bankAccounts: []
+        directorSignature: '', gmSignature: '', bankAccounts: [], hasBranches: false
     });
+
+    // --- BRANCH CONTEXT ---
+    const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadBranch = () => {
+            const storedBranch = localStorage.getItem('artron_active_branch');
+            setActiveBranchId(storedBranch || null);
+        };
+        loadBranch();
+        window.addEventListener('branch-change', loadBranch);
+        return () => window.removeEventListener('branch-change', loadBranch);
+    }, []);
+
+    // Completion Statistics for Progress Bar
+    const completionStats = useMemo(() => {
+        let completedSteps = 0;
+        let totalSteps = 7;
+
+        // 1. Company Profile (Name, ID, Address, Contact)
+        const hasProfile = !!(company.name && company.identCode && company.actualAddress && company.companyPhone);
+        if (hasProfile) completedSteps++;
+
+        // 2. Digital Identity (Socials OR Email)
+        const hasDigital = !!(company.companyEmail || company.facebookLink || company.instagramLink);
+        if (hasDigital) completedSteps++;
+
+        // 3. Banking (At least one active account)
+        const hasBank = company.bankAccounts && company.bankAccounts.length > 0;
+        if (hasBank) completedSteps++;
+
+        // 4. Modeling (Rooms exist)
+        const hasRooms = rooms.length > 0;
+        if (hasRooms) completedSteps++;
+
+        // 5. Structure (Departments exist)
+        const hasStructure = departments.length > 0;
+        if (hasStructure) completedSteps++;
+
+        // 6. Inventory (Items exist)
+        const hasInventory = inventoryItems.length > 0;
+        if (hasInventory) completedSteps++;
+
+        // 7. System (Modules Selected)
+        // Check if any module is selected in selectedModules state
+        const hasModules = Object.values(selectedModules).some(Boolean);
+        if (hasModules) completedSteps++;
+
+        return {
+            percentage: Math.round((completedSteps / totalSteps) * 100),
+            completed: completedSteps,
+            total: totalSteps,
+            missing: []
+        };
+    }, [company, rooms, departments, inventoryItems, selectedModules]);
+
+    // Helper to get active context data
+    // Returns key pointers to saving functions
+    const activeContext = useMemo(() => {
+        if (activeBranchId && company.branches) {
+            const branch = company.branches.find(b => b.id === activeBranchId);
+            if (branch) return { type: 'BRANCH' as const, data: branch, id: activeBranchId };
+        }
+        return { type: 'COMPANY' as const, data: company, id: 'main' };
+    }, [activeBranchId, company]);
+
+    // --- EFFECT: Load Branch Specific Data when Switch Happens ---
+    useEffect(() => {
+        if (activeContext.type === 'BRANCH') {
+            const branch = activeContext.data as Branch;
+            setRooms(branch.rooms || []);
+            setInventoryItems((branch.inventoryItems as any) || []);
+
+            // Sync Profile-like fields for viewing/editing
+            if (branch.socialLinks) {
+                setCompany(prev => ({
+                    ...prev,
+                    facebookLink: branch.socialLinks?.facebook || '',
+                    instagramLink: branch.socialLinks?.instagram || '',
+                    linkedinLink: branch.socialLinks?.linkedin || '',
+                    tiktokLink: branch.socialLinks?.tiktok || '',
+                    youtubeLink: branch.socialLinks?.youtube || '',
+                    bankAccounts: branch.bankAccounts || [],
+                }));
+            }
+        }
+    }, [activeContext]);
+
+    // --- EFFECT: Persist Company State to LocalStorage for BranchSwitcher ---
+    useEffect(() => {
+        if (company) {
+            localStorage.setItem('artron_company_profile', JSON.stringify(company));
+            // Dispatch event for BranchSwitcher to pick up immediately
+            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new Event('branch-change'));
+        }
+    }, [company]);
 
     const [tenantId, setTenantId] = useState<string | null>(null);
 
     // --- Security State ---
     const [security, setSecurity] = useState({ old: '', new: '', repeat: '' });
     const [passwordUpdated, setPasswordUpdated] = useState(false);
+    const [twoFactorMethod, setTwoFactorMethod] = useState<'NONE' | 'EMAIL' | 'SMS'>('NONE');
 
     const handleUpdatePassword = async () => {
         if (!security.old || !security.new || !security.repeat) {
@@ -964,9 +1181,13 @@ export default function SettingsPage() {
             const userObj = JSON.parse(storedUser);
             const userId = userObj.id || userObj._id;
 
+            const token = localStorage.getItem('token');
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/auth/change-password`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     userId,
                     oldPassword: security.old,
@@ -1024,9 +1245,25 @@ export default function SettingsPage() {
                         if (data) {
                             // Map backend fields to frontend state if names differ
                             // e.g. Backend 'contactEmail' -> Frontend 'companyEmail'
+
+                            // PRESERVE LOCAL BRANCHES:
+                            // Since branches might be client-side only for now, we must not wipe them with backend data
+                            const localProfile = localStorage.getItem('artron_company_profile');
+                            let localBranches: Branch[] = [];
+                            if (localProfile) {
+                                try {
+                                    const parsed = JSON.parse(localProfile);
+                                    if (Array.isArray(parsed.branches)) {
+                                        localBranches = parsed.branches;
+                                    }
+                                } catch (e) { }
+                            }
+
                             const mappedData = {
                                 ...data,
                                 companyEmail: data.contactEmail || data.companyEmail || '',
+                                branches: data.branches || localBranches || [],
+                                hasBranches: data.hasBranches || localBranches.length > 0
                             };
 
                             // MIGRATION: If having legacy bank data but no accounts, create default one
@@ -1050,6 +1287,7 @@ export default function SettingsPage() {
                             const isDifferentPerson = gmNameFromBackend?.trim() !== dirNameFromBackend?.trim();
 
                             setHasGM(!!(hasValidGM && isDifferentPerson));
+                            setHasBranches(!!mappedData.hasBranches);
 
                             // Automatically update localStorage to keep branding in sync immediately
                             localStorage.setItem('artron_company_profile', JSON.stringify(mappedData));
@@ -1064,7 +1302,6 @@ export default function SettingsPage() {
         initTenant();
     }, []);
 
-    const [newBranch, setNewBranch] = useState('');
     const [generatedCredentials, setGeneratedCredentials] = useState<{ user: string, pass: string } | null>(null);
 
     const handleShare = (text: string) => {
@@ -1088,11 +1325,67 @@ export default function SettingsPage() {
         }
     };
 
-    const addBranch = () => {
-        if (newBranch.trim()) {
-            setCompany({ ...company, branches: [...company.branches, newBranch.trim()] });
-            setNewBranch('');
+    // --- BRANCH MANAGEMENT ---
+    const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+    const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+    const [branchForm, setBranchForm] = useState<Branch>({
+        id: '', name: '', address: '', email: '', phone: '', managerName: '', managerEmail: '', managerPhone: ''
+    });
+
+    const openBranchModal = (branch?: Branch) => {
+        if (branch) {
+            setBranchForm(branch);
+            setEditingBranch(branch);
+        } else {
+            setBranchForm({
+                id: Date.now().toString(),
+                name: '', address: '', email: '', phone: '', managerName: '', managerEmail: '', managerPhone: ''
+            });
+            setEditingBranch(null);
         }
+        setIsBranchModalOpen(true);
+    };
+
+    const handleSaveBranch = () => {
+        if (!branchForm.name) {
+            alert('ფილიალის სახელი სავალდებულოა');
+            return;
+        }
+
+        if (editingBranch) {
+            // Update
+            setCompany({
+                ...company,
+                branches: company.branches.map(b => b.id === branchForm.id ? branchForm : b)
+            });
+        } else {
+            // Create
+            setCompany({
+                ...company,
+                branches: [...company.branches, branchForm]
+            });
+        }
+        setIsBranchModalOpen(false);
+    };
+
+    const handleDeleteBranch = (id: string) => {
+        if (confirm('ნამდვილად გსურთ ფილიალის წაშლა?')) {
+            setCompany({
+                ...company,
+                branches: company.branches.filter(b => b.id !== id)
+            });
+        }
+    };
+
+    const generateBranchManagerCredentials = () => {
+        if (!branchForm.managerName) {
+            alert("ჯერ მიუთითეთ მენეჯერის სახელი");
+            return;
+        }
+        const user = branchForm.managerName.toLowerCase().replace(/\s/g, '.') + Math.floor(Math.random() * 100);
+        const pass = Math.random().toString(36).slice(-8).toUpperCase();
+        setBranchForm({ ...branchForm, credentials: { user, pass } });
+        alert(`მონაცემები გენერირებულია და "გაეგზავნა" ${branchForm.managerEmail || 'ელ.ფოსტაზე'}`);
     };
 
     const generateGMCredentials = () => {
@@ -1250,6 +1543,8 @@ export default function SettingsPage() {
                                     <th className="pb-4 pl-4">დასახელება</th>
                                     <th className="pb-4">აღწერა</th>
                                     <th className="pb-4 text-center">რაოდენობა</th>
+                                    <th className="pb-4 text-center">ექსპლუატაციაში</th>
+                                    <th className="pb-4 text-center">საწყობში</th>
                                     <th className="pb-4 text-right pr-4">მოქმედება</th>
                                 </tr>
                             </thead>
@@ -1264,7 +1559,7 @@ export default function SettingsPage() {
                                 ))}
                                 {inventoryItems.length === 0 && (
                                     <tr>
-                                        <td colSpan={4} className="py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                                        <td colSpan={6} className="py-12 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                                             ინვენტარი ცარიელია
                                         </td>
                                     </tr>
@@ -1273,6 +1568,208 @@ export default function SettingsPage() {
                         </table>
                     </div>
                 </div>
+            </div>
+        );
+    }
+
+
+    // --- RENDER BRANCH MANAGEMENT VIEW ---
+    if (activeSubView === 'BRANCHES') {
+        return (
+            <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm gap-4">
+                    <button
+                        onClick={() => setActiveSubView('MAIN')}
+                        className="flex items-center text-slate-500 hover:text-slate-800 transition-colors group"
+                    >
+                        <ArrowLeft size={18} className="mr-2 group-hover:-translate-x-1 transition-transform" />
+                        <span className="font-bold text-sm">უკან დაბრუნება</span>
+                    </button>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-emerald-500 rounded-2xl text-white shadow-lg shadow-emerald-500/20">
+                            <GitBranch size={24} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">ფილიალების მართვა</h2>
+                    </div>
+                    <div className="w-24"></div> {/* Spacer for balance */}
+                </div>
+
+                <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 grid grid-cols-1 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {company.branches.map((br) => (
+                            <div key={br.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 hover:shadow-lg hover:border-emerald-200 transition-all group relative">
+                                <div className="flex justify-between items-start mb-4">
+                                    <h3 className="text-lg font-black text-slate-800">{br.name}</h3>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => openBranchModal(br)} className="p-2 bg-white rounded-xl shadow-sm hover:text-emerald-500 hover:shadow-md transition-all">
+                                            <Edit3 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDeleteBranch(br.id)} className="p-2 bg-white rounded-xl shadow-sm hover:text-red-500 hover:shadow-md transition-all">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center text-slate-500 text-xs font-bold">
+                                        <MapPin size={14} className="mr-2 text-emerald-500" />
+                                        {br.address}
+                                    </div>
+                                    <div className="flex items-center text-slate-500 text-xs font-bold">
+                                        <Mail size={14} className="mr-2 text-emerald-500" />
+                                        {br.email || '---'}
+                                    </div>
+                                    <div className="flex items-center text-slate-500 text-xs font-bold">
+                                        <Phone size={14} className="mr-2 text-emerald-500" />
+                                        {br.phone || '---'}
+                                    </div>
+                                    {br.managerName && (
+                                        <div className="pt-3 border-t border-slate-100 mt-3">
+                                            <p className="text-[10px] text-slate-400 font-black uppercase mb-1">მენეჯერი</p>
+                                            <div className="flex items-center text-slate-700 font-bold text-sm">
+                                                <UserCheck size={16} className="mr-2 text-emerald-500" />
+                                                {br.managerName}
+                                            </div>
+                                            {br.managerPhone && (
+                                                <p className="text-[10px] text-slate-400 mt-1 pl-6">{br.managerPhone}</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+
+                        <button
+                            onClick={() => openBranchModal()}
+                            className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2rem] flex flex-col items-center justify-center text-slate-400 font-black p-8 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-600 transition-all group min-h-[200px]"
+                        >
+                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm mb-4 group-hover:scale-110 transition-transform">
+                                <Plus size={24} />
+                            </div>
+                            <span className="text-sm">ფილიალის დამატება</span>
+                        </button>
+                    </div>
+                </div>
+                {/* BRANCH MODAL */}
+                {isBranchModalOpen && (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                        <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-scaleIn">
+                            <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                <h3 className="text-xl font-black text-slate-800 flex items-center">
+                                    <GitBranch size={24} className="mr-3 text-indigo-500" />
+                                    {editingBranch ? 'ფილიალის რედაქტირება' : 'ახალი ფილიალი'}
+                                </h3>
+                                <button onClick={() => setIsBranchModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ფილიალის დასახელება <span className="text-red-500">*</span></label>
+                                        <input
+                                            value={branchForm.name}
+                                            onChange={e => setBranchForm({ ...branchForm, name: e.target.value })}
+                                            placeholder="მაგ: ბათუმის ფილიალი"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ფაქტობრივი მისამართი</label>
+                                        <input
+                                            value={branchForm.address}
+                                            onChange={e => setBranchForm({ ...branchForm, address: e.target.value })}
+                                            placeholder="ქუჩა, ნომერი..."
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ელ.ფოსტა</label>
+                                        <input
+                                            value={branchForm.email}
+                                            onChange={e => setBranchForm({ ...branchForm, email: e.target.value })}
+                                            placeholder="branch@gym.ge"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ტელეფონი</label>
+                                        <input
+                                            value={branchForm.phone}
+                                            onChange={e => setBranchForm({ ...branchForm, phone: e.target.value })}
+                                            placeholder="555..."
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-indigo-400"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-100">
+                                    <h4 className="text-sm font-black text-slate-800 mb-4 flex items-center">
+                                        <UserCheck size={16} className="mr-2 text-emerald-500" />
+                                        ფილიალის მენეჯერი
+                                    </h4>
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">სახელი გვარი</label>
+                                            <input
+                                                value={branchForm.managerName}
+                                                onChange={e => setBranchForm({ ...branchForm, managerName: e.target.value })}
+                                                placeholder="გიორგი გიორგაძე"
+                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-1">მენეჯერის ელ.ფოსტა</label>
+                                            <input
+                                                value={branchForm.managerEmail}
+                                                onChange={e => setBranchForm({ ...branchForm, managerEmail: e.target.value })}
+                                                placeholder="manager@gym.ge"
+                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[11px] font-black text-slate-400 uppercase ml-1">მობილური</label>
+                                            <input
+                                                value={branchForm.managerPhone || ''}
+                                                onChange={e => setBranchForm({ ...branchForm, managerPhone: e.target.value })}
+                                                placeholder="555..."
+                                                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3 pt-2">
+                                            <button className="py-3 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition-all flex flex-col items-center justify-center gap-1">
+                                                <Link size={16} />
+                                                <span>ბმულის გაგზავნა</span>
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    await generateBranchManagerCredentials();
+                                                    alert(`მონაცემები გენერირებულია და "გაეგზავნა" ${branchForm.managerPhone ? 'ნომერზე: ' + branchForm.managerPhone : branchForm.managerEmail ? 'ელ.ფოსტაზე: ' + branchForm.managerEmail : 'მითითებულ არხზე'}`);
+                                                }}
+                                                className="py-3 bg-emerald-500/10 text-emerald-600 font-bold rounded-xl text-xs hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-1"
+                                            >
+                                                <Key size={16} />
+                                                <span>User & OTP გაგზავნა</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                                <button
+                                    onClick={handleSaveBranch}
+                                    className="px-8 py-3 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20"
+                                >
+                                    შენახვა
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -1718,6 +2215,13 @@ export default function SettingsPage() {
                                         <div className={`w-4 h-4 bg-white rounded-full transition-transform ${headerConfig.showAlert ? 'translate-x-4' : ''}`}></div>
                                     </div>
                                 </div>
+                                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors cursor-pointer"
+                                    onClick={() => setHeaderConfig({ ...headerConfig, showControlPanel: !headerConfig.showControlPanel })}>
+                                    <span className="text-sm font-bold text-slate-700">სამართავი პანელი (Control Panel)</span>
+                                    <div className={`w-10 h-6 rounded-full p-1 transition-colors ${headerConfig.showControlPanel ? 'bg-indigo-500' : 'bg-slate-200'}`}>
+                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${headerConfig.showControlPanel ? 'translate-x-4' : ''}`}></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1773,7 +2277,8 @@ export default function SettingsPage() {
                 swift: '',
                 iban: '',
                 recipientName: company.recipientName || '', // Default to company name if valid
-                isDefault: banks.length === 0 // Make default if it's the first one
+                isDefault: banks.length === 0, // Make default if it's the first one
+                purposes: banks.length === 0 ? ['INVOICE'] : []
             };
             setCompany({ ...company, bankAccounts: [...banks, newBank] });
             setEditingBankIds(prev => new Set(prev).add(newBank.id));
@@ -1786,26 +2291,45 @@ export default function SettingsPage() {
             }));
         };
 
-        const toggleDefaultBank = (id: string, e: React.MouseEvent) => {
-            e.stopPropagation();
+        const toggleBankPurpose = (id: string, purpose: string) => {
             setCompany(prev => {
                 const banks = prev.bankAccounts || [];
-                const target = banks.find(b => b.id === id);
-                const isCurrentlyDefault = target?.isDefault;
+                return {
+                    ...prev,
+                    bankAccounts: banks.map(b => {
+                        if (b.id === id) {
+                            const currentPurposes = b.purposes || (b.isDefault ? ['INVOICE'] : []);
+                            const exists = currentPurposes.includes(purpose);
+                            let newPurposes = exists
+                                ? currentPurposes.filter(p => p !== purpose)
+                                : [...currentPurposes, purpose];
 
-                if (isCurrentlyDefault) {
-                    // Toggle Off
-                    return {
-                        ...prev,
-                        bankAccounts: banks.map(b => b.id === id ? { ...b, isDefault: false } : b)
-                    };
-                } else {
-                    // Toggle On (and others off)
-                    return {
-                        ...prev,
-                        bankAccounts: banks.map(b => ({ ...b, isDefault: b.id === id }))
-                    };
-                }
+                            // Sync isDefault with INVOICE purpose for backward compatibility
+                            const newIsDefault = purpose === 'INVOICE' ? !exists : b.isDefault;
+
+                            // Ensure INVOICE is in purposes if isDefault is true (re-sync)
+                            if (newIsDefault && !newPurposes.includes('INVOICE')) {
+                                newPurposes.push('INVOICE');
+                            } else if (!newIsDefault && newPurposes.includes('INVOICE')) {
+                                newPurposes = newPurposes.filter(p => p !== 'INVOICE');
+                            }
+
+                            return { ...b, purposes: newPurposes, isDefault: newIsDefault };
+                        }
+                        // If we just turned ON 'INVOICE' for this bank, turn if OFF for others (single primary invoice account)
+                        // Actually, maybe we allow multiple? Standard practice is usually one default for auto-generation.
+                        // Let's keep strict single default for INVOICE to avoid ambiguity.
+                        if (purpose === 'INVOICE') {
+                            // If the target bank turned INVOICE ON, others must turn fields OFF or just isDefault OFF?
+                            // Let's keeping it simple: allows multiple 'Active for Invoices' for now OR enforce single.
+                            // The previous logic enforced single isDefault. Let's try to enforce single INVOICE default if enabling.
+                            // BUT, user might want multiple active.
+                            // Let's just update the target bank for now. User asked for expansion, likely implies multiple active contexts.
+                            return b;
+                        }
+                        return b;
+                    })
+                };
             });
         };
 
@@ -1863,15 +2387,11 @@ export default function SettingsPage() {
                                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-lg font-black ${bank.isDefault ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>
                                             {index + 1}
                                         </div>
-                                        <button onClick={(e) => toggleDefaultBank(bank.id, e)} className="cursor-pointer group flex items-center space-x-2 select-none outline-none">
-                                            <div className={`w-12 h-6 rounded-full p-1 transition-colors ${bank.isDefault ? 'bg-blue-500' : 'bg-slate-200 group-hover:bg-slate-300'}`}>
-                                                <div className={`w-4 h-4 bg-white rounded-full transition-transform shadow-sm transform ${bank.isDefault ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                            </div>
-                                            <span className={`text-xs font-bold uppercase transition-colors ${bank.isDefault ? 'text-blue-500' : 'text-slate-400'}`}>
-                                                {bank.isDefault ? 'აქტიური (ინვოისებისთვის)' : 'არააქტიური'}
-                                            </span>
-                                        </button>
+                                        <span className={`text-xs font-bold uppercase transition-colors ${(bank.purposes?.length || 0) > 0 ? 'text-blue-500' : 'text-slate-400'}`}>
+                                            {(bank.purposes?.length || 0) > 0 ? 'აქტიური' : 'არააქტიური'}
+                                        </span>
                                     </div>
+
                                     <div className="flex items-center space-x-2">
                                         <button onClick={() => toggleEditMode(bank.id)} className={`p-2 rounded-xl transition-all ${isEditing ? 'text-green-500 bg-green-50 hover:bg-green-100' : 'text-slate-300 hover:text-blue-500 hover:bg-blue-50'}`}>
                                             {isEditing ? <Check size={20} /> : <Pencil size={20} />}
@@ -1964,6 +2484,26 @@ export default function SettingsPage() {
                                             <Copy size={18} />
                                         </button>
                                     </div>
+                                    <div className="md:col-span-2">
+                                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block">ანგარიშის დანიშნულება (მონიშნეთ შესაბდისი)</label>
+                                        <div className="flex flex-wrap gap-3">
+                                            {ACCOUNT_USAGES.map(usage => {
+                                                const isActive = (bank.purposes || (bank.isDefault ? ['INVOICE'] : [])).includes(usage.key);
+                                                return (
+                                                    <button
+                                                        key={usage.key}
+                                                        onClick={() => toggleBankPurpose(bank.id, usage.key)}
+                                                        className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border transition-all text-xs font-bold ${isActive
+                                                            ? 'bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-500/20'
+                                                            : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-500'}`}
+                                                    >
+                                                        {isActive && <Check size={14} className="mr-1" />}
+                                                        {usage.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         );
@@ -1986,7 +2526,7 @@ export default function SettingsPage() {
                         </p>
                     </div>
                 </div>
-            </div>
+            </div >
         );
     }
 
@@ -2193,39 +2733,24 @@ export default function SettingsPage() {
                                 onChange={handleLogoUpload}
                             />
                             <h3 className="text-lg font-black text-slate-800 mb-1">{company.brandName || "ბრენდის სახელი"}</h3>
-                            <p className="text-xs text-slate-400 font-bold uppercase">{company.activityField || "საქმიანობის სფერო"}</p>
+                            <input
+                                value={company.slogan}
+                                onChange={e => setCompany({ ...company, slogan: e.target.value })}
+                                className="text-xs text-slate-400 font-medium italic bg-transparent text-center border-b border-dashed border-slate-300 focus:border-indigo-400 outline-none w-3/4 mb-2"
+                                placeholder="სლოგანი..."
+                            />
+                            <p className="text-xs text-slate-400 font-bold uppercase mb-2">{company.activityField || "საქმიანობის სფერო"}</p>
+                            {company.actualAddress && (
+                                <p className="text-[10px] text-slate-500 font-bold bg-slate-50 px-3 py-1.5 rounded-lg flex items-center">
+                                    <MapPin size={12} className="mr-1.5 text-slate-400" />
+                                    {company.actualAddress}
+                                </p>
+                            )}
                         </div>
 
-                        <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-xl relative overflow-hidden">
-                            <div className="relative z-10">
-                                <h4 className="font-black text-lg mb-6 flex items-center">
-                                    <GitBranch size={18} className="mr-2 text-indigo-400" />
-                                    ფილიალები
-                                </h4>
-                                <div className="space-y-3 mb-6">
-                                    {company.branches.map((br, i) => (
-                                        <div key={i} className="flex items-center justify-between bg-white/5 px-4 py-3 rounded-2xl border border-white/10">
-                                            <span className="text-sm font-bold">{br}</span>
-                                            <button onClick={() => setCompany({ ...company, branches: company.branches.filter((_, idx) => idx !== i) })} className="text-slate-400 hover:text-red-400 transition-colors">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {company.branches.length === 0 && <p className="text-xs text-slate-500 text-center py-2">ფილიალები არ არის დამატებული</p>}
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <input
-                                        value={newBranch}
-                                        onChange={e => setNewBranch(e.target.value)}
-                                        placeholder="ახალი ფილიალი..."
-                                        className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:border-indigo-400 placeholder:text-slate-600"
-                                    />
-                                    <button onClick={addBranch} className="p-2 bg-indigo-500 rounded-xl hover:bg-indigo-400 transition-colors">
-                                        <Plus size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+
+
+
                     </div>
 
                     <div className="lg:col-span-2 space-y-8">
@@ -2260,6 +2785,15 @@ export default function SettingsPage() {
                                         onChange={e => setCompany({ ...company, legalAddress: e.target.value })}
                                         className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
                                         placeholder="თბილისი, ჭავჭავაძის გამზ. 1"
+                                    />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider ml-1">ფაქტობრივი მისამართი <span className="text-gray-400 text-[9px] ml-1">(ნაჩვენები იქნება პროფილზე)</span></label>
+                                    <input
+                                        value={company.actualAddress}
+                                        onChange={e => setCompany({ ...company, actualAddress: e.target.value })}
+                                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold outline-none focus:border-indigo-400"
+                                        placeholder="მაგ: ქუთაისი, ლესელიძის მე-2 შესახვევი"
                                     />
                                 </div>
                             </div>
@@ -2297,33 +2831,131 @@ export default function SettingsPage() {
                                         </button>
                                     )}
                                 </div>
-                                {hasGM && (
-                                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4 relative overflow-hidden">
-                                        <h5 className="font-black text-slate-800 flex items-center relative z-10"><ShieldCheck size={16} className="mr-2 text-emerald-500" /> გენერალური მენეჯერი <span className="text-red-500 ml-1">*</span></h5>
-                                        <div className="space-y-3 relative z-10">
-                                            <input value={company.gmName} onChange={e => setCompany({ ...company, gmName: e.target.value })} placeholder="სახელი გვარი" className="w-full bg-white px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold outline-none" />
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={generateGMCredentials}
-                                                    className="flex-1 bg-slate-800 text-white py-2.5 rounded-xl text-[10px] font-black hover:bg-slate-700 transition-all flex items-center justify-center"
-                                                >
-                                                    <Key size={14} className="mr-1.5" /> მონაცემების გენერაცია
+                                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4 relative overflow-hidden">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h5 className="font-black text-slate-800 flex items-center relative z-10"><ShieldCheck size={16} className="mr-2 text-emerald-500" /> გენერალური მენეჯერი</h5>
+                                        <label className="flex items-center space-x-3 cursor-pointer group relative z-10">
+                                            <div className={`w-10 h-6 rounded-full p-1 transition-colors ${hasGM ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${hasGM ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                            </div>
+                                            <input type="checkbox" checked={hasGM} onChange={e => handleGMToggle(e.target.checked)} className="hidden" />
+                                        </label>
+                                    </div>
+                                    {/* BRANCH TOGGLE */}
+                                    <div className="flex items-center justify-between mb-2 pt-4 border-t border-slate-100">
+                                        <h5 className="font-black text-slate-800 flex items-center relative z-10"><GitBranch size={16} className="mr-2 text-emerald-500" /> ფილიალი</h5>
+                                        <label className="flex items-center space-x-3 cursor-pointer group relative z-10">
+                                            <div className={`w-10 h-6 rounded-full p-1 transition-colors ${hasBranches ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                                                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${hasBranches ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                            </div>
+                                            <input type="checkbox" checked={hasBranches} onChange={e => setHasBranches(e.target.checked)} className="hidden" />
+                                        </label>
+                                    </div>
+
+                                    {hasGM && (
+                                        <div className="space-y-4 animate-fadeIn">
+                                            <div className="p-4 bg-white rounded-xl border border-slate-200 flex items-center justify-between">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className="p-2 bg-emerald-100/50 rounded-lg text-emerald-600">
+                                                        <ShieldCheck size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h6 className="text-xs font-black text-slate-800">{company.gmName || "მენეჯერი არ არის მითითებული"}</h6>
+                                                        <p className="text-[10px] text-slate-400 font-bold">{company.gmPhone || "---"}</p>
+                                                    </div>
+                                                </div>
+                                                <button onClick={() => setIsGMModalOpen(true)} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors">
+                                                    <Edit3 size={16} />
                                                 </button>
                                             </div>
                                         </div>
-                                        {generatedCredentials && (
-                                            <div className="mt-4 p-4 bg-emerald-50 rounded-xl border border-emerald-100 animate-fadeIn relative z-10">
-                                                <p className="text-[10px] font-bold text-emerald-800">User: <span className="font-mono">{generatedCredentials.user}</span></p>
-                                                <p className="text-[10px] font-bold text-emerald-800">Pass: <span className="font-mono">{generatedCredentials.pass}</span></p>
-                                                <button onClick={() => navigator.clipboard.writeText(`User: ${generatedCredentials.user}\nPass: ${generatedCredentials.pass}`)} className="absolute top-2 right-2 text-emerald-400 hover:text-emerald-600">
-                                                    <Copy size={14} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         </div>
+
+                        {/* GENERAL MANAGER MODAL */}
+                        {isGMModalOpen && (
+                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                                <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-scaleIn">
+                                    <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                                        <h3 className="text-xl font-black text-slate-800 flex items-center">
+                                            <ShieldCheck size={24} className="mr-3 text-emerald-500" />
+                                            გენერალური მენეჯერი
+                                        </h3>
+                                        <button onClick={() => setIsGMModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 transition-colors">
+                                            <X size={24} />
+                                        </button>
+                                    </div>
+                                    <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">სახელი გვარი</label>
+                                                <input
+                                                    value={company.gmName}
+                                                    onChange={e => setCompany({ ...company, gmName: e.target.value })}
+                                                    placeholder="გიორგი გიორგაძე"
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">პირადი ნომერი</label>
+                                                <input
+                                                    value={company.gmId}
+                                                    onChange={e => setCompany({ ...company, gmId: e.target.value })}
+                                                    placeholder="01010101010"
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">მობილური</label>
+                                                <input
+                                                    value={company.gmPhone}
+                                                    onChange={e => setCompany({ ...company, gmPhone: e.target.value })}
+                                                    placeholder="555..."
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[11px] font-black text-slate-400 uppercase ml-1">ელ.ფოსტა</label>
+                                                <input
+                                                    value={company.gmEmail}
+                                                    onChange={e => setCompany({ ...company, gmEmail: e.target.value })}
+                                                    placeholder="manager@gym.ge"
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold outline-none focus:border-emerald-400"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="pt-6 border-t border-slate-100 grid grid-cols-2 gap-4">
+                                            <button className="py-3 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition-all flex flex-col items-center justify-center gap-1">
+                                                <Link size={16} />
+                                                <span>ბმულის გაგზავნა</span>
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    await generateGMCredentials();
+                                                    // Hypothetical 'send' logic here
+                                                    alert('მონაცემები გაგზავნილია (სიმულაცია)');
+                                                }}
+                                                className="py-3 bg-emerald-500/10 text-emerald-600 font-bold rounded-xl text-xs hover:bg-emerald-500/20 transition-all flex flex-col items-center justify-center gap-1"
+                                            >
+                                                <Key size={16} />
+                                                <span>User & OTP გაგზავნა</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+                                        <button
+                                            onClick={() => setIsGMModalOpen(false)}
+                                            className="px-8 py-3 bg-slate-900 text-white font-black rounded-xl hover:bg-slate-800 transition-all shadow-lg"
+                                        >
+                                            შენახვა
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Security Section */}
                         <div className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm space-y-8">
@@ -2371,6 +3003,53 @@ export default function SettingsPage() {
                                     </button>
                                 </div>
                             </div>
+
+                            <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h5 className="font-black text-slate-800 text-sm">ორმაგი ავტორიზაცია (2FA)</h5>
+                                    {twoFactorMethod !== 'NONE' && (
+                                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-600 px-2 py-1 rounded-lg">ჩართულია</span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                                    დამატებითი უსაფრთხოებისთვის აირჩიეთ ავტორიზაციის მეთოდი.
+                                </p>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div
+                                        onClick={() => setTwoFactorMethod('NONE')}
+                                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center space-x-3 ${twoFactorMethod === 'NONE' ? 'bg-white border-indigo-500 shadow-md transform scale-[1.02]' : 'bg-white/50 border-slate-200 hover:border-indigo-200'}`}
+                                    >
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${twoFactorMethod === 'NONE' ? 'border-indigo-500' : 'border-slate-300'}`}>
+                                            {twoFactorMethod === 'NONE' && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>}
+                                        </div>
+                                        <span className={`text-xs font-bold ${twoFactorMethod === 'NONE' ? 'text-indigo-900' : 'text-slate-500'}`}>გამორთული</span>
+                                    </div>
+
+                                    <div
+                                        onClick={() => setTwoFactorMethod('EMAIL')}
+                                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center space-x-3 ${twoFactorMethod === 'EMAIL' ? 'bg-white border-indigo-500 shadow-md transform scale-[1.02]' : 'bg-white/50 border-slate-200 hover:border-indigo-200'}`}
+                                    >
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${twoFactorMethod === 'EMAIL' ? 'border-indigo-500' : 'border-slate-300'}`}>
+                                            {twoFactorMethod === 'EMAIL' && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>}
+                                        </div>
+                                        <Mail size={16} className={twoFactorMethod === 'EMAIL' ? 'text-indigo-500' : 'text-slate-400'} />
+                                        <span className={`text-xs font-bold ${twoFactorMethod === 'EMAIL' ? 'text-indigo-900' : 'text-slate-500'}`}>ელ.ფოსტა</span>
+                                    </div>
+
+                                    <div
+                                        onClick={() => setTwoFactorMethod('SMS')}
+                                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center space-x-3 ${twoFactorMethod === 'SMS' ? 'bg-white border-indigo-500 shadow-md transform scale-[1.02]' : 'bg-white/50 border-slate-200 hover:border-indigo-200'}`}
+                                    >
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${twoFactorMethod === 'SMS' ? 'border-indigo-500' : 'border-slate-300'}`}>
+                                            {twoFactorMethod === 'SMS' && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>}
+                                        </div>
+                                        <div className="relative">
+                                            <Phone size={16} className={twoFactorMethod === 'SMS' ? 'text-indigo-500' : 'text-slate-400'} />
+                                        </div>
+                                        <span className={`text-xs font-bold ${twoFactorMethod === 'SMS' ? 'text-indigo-900' : 'text-slate-500'}`}>SMS კოდი</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2380,7 +3059,7 @@ export default function SettingsPage() {
                         onSave={handleSaveSignature}
                         title={sigType === 'DIRECTOR' ? 'დირექტორის ხელმოწერა' : 'გენერალური მენეჯერის ხელმოწერა'}
                     />
-                </div>
+                </div >
             </div >
         );
     }
@@ -2617,6 +3296,42 @@ export default function SettingsPage() {
                 </div>
             </header>
 
+            {/* Profile Completion Progress Bar */}
+            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-xl shadow-slate-900/20">
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-2">
+                        <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-emerald-500 rounded-lg text-white shadow-lg shadow-emerald-500/30">
+                                <Activity size={20} />
+                            </div>
+                            <h3 className="text-xl font-black tracking-tight">სისტემის მზაობა</h3>
+                        </div>
+                        <p className="text-slate-400 text-sm font-medium">შეავსეთ ყველა სავალდებულო ველი სისტემის გასაშვებად</p>
+                    </div>
+
+                    <div className="flex-1 max-w-md w-full">
+                        <div className="flex justify-between items-end mb-2">
+                            <span className="text-xs font-bold uppercase text-emerald-400 tracking-wider">
+                                {completionStats.completed} / {completionStats.total} ეტაპი დასრულებულია
+                            </span>
+                            <span className="text-2xl font-black">{completionStats.percentage}%</span>
+                        </div>
+                        <div className="h-4 w-full bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+                            <div
+                                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000 ease-out relative"
+                                style={{ width: `${completionStats.percentage}%` }}
+                            >
+                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Decorative Elements */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+            </div>
+
             {/* Main Navigation Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 
@@ -2643,55 +3358,7 @@ export default function SettingsPage() {
                     </div>
                 </button>
 
-                {/* 2. Gym Modeling (Step 1) */}
-                <button
-                    onClick={() => setActiveSubView('MODELING')}
-                    disabled={onboardingStep < 1}
-                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 1 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 1 ? 'ring-4 ring-emerald-500/20 shadow-2xl scale-[1.02]' : ''}`}
-                >
-                    <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <Ruler size={28} />
-                    </div>
-                    <h3 className="text-lg font-black text-slate-800 mb-2">დარბაზის მოდელირება</h3>
-                    <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
-                        სივრცის დაგეგმარება, ზონები და კარადათა რაოდენობა
-                    </p>
-                    {onboardingStep > 1 && (
-                        <div className="absolute top-6 right-6 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
-                            <Check size={16} className="text-emerald-600" />
-                        </div>
-                    )}
-                    <div className="flex items-center text-emerald-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
-                        <span>დაგეგმვა</span>
-                        <ArrowRight size={14} className="ml-2" />
-                    </div>
-                </button>
-
-                {/* 3. Sports Inventory Card (Step 2) */}
-                <button
-                    onClick={() => setActiveSubView('INVENTORY')}
-                    disabled={onboardingStep < 2}
-                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-sky-200 hover:shadow-xl hover:shadow-sky-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 2 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 2 ? 'ring-4 ring-sky-500/20 shadow-2xl scale-[1.02]' : ''}`}
-                >
-                    <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <Dumbbell size={28} />
-                    </div>
-                    <h3 className="text-lg font-black text-slate-800 mb-2">სპორტული ინვენტარი</h3>
-                    <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
-                        დარბაზში განთავსებული სავარჯიშო ინსტრუმენტების სია
-                    </p>
-                    {onboardingStep > 2 && (
-                        <div className="absolute top-6 right-6 w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
-                            <Check size={16} className="text-sky-600" />
-                        </div>
-                    )}
-                    <div className="flex items-center text-sky-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
-                        <span>მართვა</span>
-                        <ArrowRight size={14} className="ml-2" />
-                    </div>
-                </button>
-
-                {/* 4. Digital Settings Card (Step 3) */}
+                {/* 2. Digital Settings Card (Step 3) */}
                 <button
                     onClick={() => setActiveSubView('DIGITAL')}
                     disabled={onboardingStep < 3}
@@ -2715,7 +3382,7 @@ export default function SettingsPage() {
                     </div>
                 </button>
 
-                {/* 5. Bank Details Card */}
+                {/* 3. Bank Details Card */}
                 <button
                     onClick={() => setActiveSubView('BANK')}
                     disabled={onboardingStep < 4}
@@ -2739,31 +3406,55 @@ export default function SettingsPage() {
                     </div>
                 </button>
 
-                {/* 6. Structure (Step 5) */}
+                {/* 4. Gym Modeling (Step 1) */}
                 <button
-                    onClick={() => setActiveSubView('STRUCTURE')}
-                    disabled={onboardingStep < 5}
-                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 5 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 5 ? 'ring-4 ring-blue-500/20 shadow-2xl scale-[1.02]' : ''}`}
+                    onClick={() => setActiveSubView('MODELING')}
+                    disabled={onboardingStep < 1}
+                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-emerald-200 hover:shadow-xl hover:shadow-emerald-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 1 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 1 ? 'ring-4 ring-emerald-500/20 shadow-2xl scale-[1.02]' : ''}`}
                 >
-                    <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <Network size={28} />
+                    <div className="w-14 h-14 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <Ruler size={28} />
                     </div>
-                    <h3 className="text-lg font-black text-slate-800 mb-2">სტრუქტურა</h3>
+                    <h3 className="text-lg font-black text-slate-800 mb-2">დარბაზის მოდელირება</h3>
                     <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
-                        დეპარტამენტები, პოზიციები და თანამშრომლების იერარქია
+                        სივრცის დაგეგმარება, ზონები და კარადათა რაოდენობა
                     </p>
-                    {onboardingStep > 5 && (
-                        <div className="absolute top-6 right-6 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                            <Check size={16} className="text-blue-600" />
+                    {onboardingStep > 1 && (
+                        <div className="absolute top-6 right-6 w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <Check size={16} className="text-emerald-600" />
                         </div>
                     )}
-                    <div className="flex items-center text-blue-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                    <div className="flex items-center text-emerald-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                        <span>დაგეგმვა</span>
+                        <ArrowRight size={14} className="ml-2" />
+                    </div>
+                </button>
+
+                {/* 5. Sports Inventory Card (Step 2) */}
+                <button
+                    onClick={() => setActiveSubView('INVENTORY')}
+                    disabled={onboardingStep < 2}
+                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-sky-200 hover:shadow-xl hover:shadow-sky-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 2 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 2 ? 'ring-4 ring-sky-500/20 shadow-2xl scale-[1.02]' : ''}`}
+                >
+                    <div className="w-14 h-14 bg-sky-50 text-sky-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <Dumbbell size={28} />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 mb-2">სპორტული ინვენტარი</h3>
+                    <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
+                        დარბაზში განთავსებული სავარჯიშო ინსტრუმენტების სია
+                    </p>
+                    {onboardingStep > 2 && (
+                        <div className="absolute top-6 right-6 w-8 h-8 bg-sky-100 rounded-full flex items-center justify-center">
+                            <Check size={16} className="text-sky-600" />
+                        </div>
+                    )}
+                    <div className="flex items-center text-sky-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
                         <span>მართვა</span>
                         <ArrowRight size={14} className="ml-2" />
                     </div>
                 </button>
 
-                {/* 7. System Builder (Step 6) */}
+                {/* 6. System Builder (Step 6) */}
                 <button
                     onClick={() => setActiveSubView('BUILDER')}
                     disabled={onboardingStep < 6}
@@ -2794,7 +3485,58 @@ export default function SettingsPage() {
                     </div>
                 </button>
 
-                {/* 8. Instructions */}
+                {/* 7. Structure (Step 5) */}
+                <button
+                    onClick={() => setActiveSubView('STRUCTURE')}
+                    disabled={onboardingStep < 5}
+                    className={`group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-blue-200 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 hover:-translate-y-1 text-left ${onboardingStep < 5 ? 'opacity-20 grayscale pointer-events-none blur-[2px]' : ''} ${onboardingStep === 5 ? 'ring-4 ring-blue-500/20 shadow-2xl scale-[1.02]' : ''}`}
+                >
+                    <div className="w-14 h-14 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <Network size={28} />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 mb-2">სტრუქტურა</h3>
+                    <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
+                        დეპარტამენტები, პოზიციები და თანამშრომლების იერარქია
+                    </p>
+                    {onboardingStep > 5 && (
+                        <div className="absolute top-6 right-6 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <Check size={16} className="text-blue-600" />
+                        </div>
+                    )}
+                    <div className="flex items-center text-blue-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                        <span>მართვა</span>
+                        <ArrowRight size={14} className="ml-2" />
+                    </div>
+                </button>
+
+                {/* 8. Branch Management */}
+                {hasBranches && (
+                    <button
+                        onClick={() => setActiveSubView('BRANCHES')}
+                        className="group relative p-8 bg-emerald-600 rounded-[2.5rem] shadow-xl shadow-emerald-600/20 hover:shadow-2xl hover:shadow-emerald-600/30 transition-all duration-300 hover:-translate-y-1 overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <GitBranch size={120} className="text-white transform rotate-12" />
+                        </div>
+                        <div className="relative z-10 flex flex-col h-full justify-between space-y-8">
+                            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-white">
+                                <GitBranch size={28} />
+                            </div>
+                            <div className="text-left">
+                                <h3 className="text-xl font-black text-white mb-2">ფილიალის მართვა</h3>
+                                <p className="text-emerald-100 text-xs font-medium leading-relaxed opacity-80">
+                                    მართეთ ფილიალები და ლოკაციები
+                                </p>
+                            </div>
+                            <div className="flex items-center text-white/80 text-xs font-bold uppercase tracking-wider group-hover:text-white transition-colors">
+                                <span>გახსნა</span>
+                                <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                        </div>
+                    </button>
+                )}
+
+                {/* 9. Instructions */}
                 <button
                     onClick={() => setActiveSubView('INSTRUCTIONS')}
                     disabled={onboardingStep < 7}
@@ -2812,8 +3554,6 @@ export default function SettingsPage() {
                         <ArrowRight size={14} className="ml-2" />
                     </div>
                 </button>
-
-
 
                 {/* Security Card (Placeholder) */}
                 <div className="group p-8 bg-slate-50 rounded-[3rem] border border-slate-100 hover:bg-white hover:shadow-2xl hover:shadow-rose-500/10 transition-all cursor-not-allowed opacity-60">
@@ -2841,7 +3581,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
-
             <style jsx global>{`
               @keyframes fadeIn {
                 from { opacity: 0; transform: translateY(10px); }

@@ -265,8 +265,8 @@ export default function OnboardingPage() {
                     <div className="space-y-4">
                       <input value={company.directorName} onChange={e => setCompany({ ...company, directorName: e.target.value })} placeholder="სახელი გვარი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                       <input value={company.directorId} onChange={e => setCompany({ ...company, directorId: e.target.value })} placeholder="პირადი ნომერი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
-                      <input value={company.directorPhone} onChange={e => setCompany({ ...company, directorPhone: e.target.value })} placeholder="მობილური" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
-                      <input value={company.directorEmail} onChange={e => setCompany({ ...company, directorEmail: e.target.value })} placeholder="ელ-ფოსტა" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                      <input value={company.directorPhone} onChange={e => setCompany({ ...company, directorPhone: e.target.value })} placeholder="პირადი მობილური" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                      <input value={company.directorEmail} onChange={e => setCompany({ ...company, directorEmail: e.target.value })} placeholder="პირადი მეილი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                     </div>
                   </div>
                   <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-800 space-y-6 text-left">
@@ -275,16 +275,8 @@ export default function OnboardingPage() {
                       <input value={company.legalAddress} onChange={e => setCompany({ ...company, legalAddress: e.target.value })} placeholder="იურიდიული მისამართი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                       <input value={company.identCode} onChange={e => setCompany({ ...company, identCode: e.target.value })} placeholder="ს/კოდი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-mono font-bold" />
                     </div>
-                    <div className="pt-6 border-t border-slate-800">
-                      <label className="flex items-center space-x-3 cursor-pointer group">
-                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${hasGeneralManager ? 'bg-lime-400 border-lime-400' : 'border-slate-600 group-hover:border-lime-400'}`}>
-                          {hasGeneralManager && <UserCheck size={14} className="text-slate-900" />}
-                        </div>
-                        <input type="checkbox" checked={hasGeneralManager} onChange={e => setHasGeneralManager(e.target.checked)} className="hidden" />
-                        <span className={`text-xs font-black uppercase tracking-widest transition-colors ${hasGeneralManager ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}>გენერალური მენეჯერის პოზიცია</span>
-                      </label>
-                    </div>
                   </div>
+                  {/* General Manager Checkbox REMOVED as per request */}
                 </div>
 
                 {!hasGeneralManager && (
