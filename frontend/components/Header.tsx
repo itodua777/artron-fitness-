@@ -1,8 +1,9 @@
 
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, User, LogIn, LogOut, ClipboardPen, Plus, Trash2, Clock, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Mail, Settings, AlertCircle, Check } from 'lucide-react';
+import { Search, Bell, User, LogIn, LogOut, ClipboardPen, Plus, Trash2, Clock, X, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Mail, Settings, AlertCircle, Check, LayoutGrid } from 'lucide-react';
 import { useLanguage } from '../app/contexts/LanguageContext';
+import BranchSwitcher from './BranchSwitcher';
 
 interface HeaderProps {
     title?: string;
@@ -42,7 +43,8 @@ const Header: React.FC<HeaderProps> = ({ title = "Dashboard", tenantName }) => {
         showLogin: false,
         showBookmark: false,
         showSearch: false,
-        showAlert: false
+        showAlert: false,
+        showControlPanel: false
     });
 
     useEffect(() => {
@@ -244,6 +246,41 @@ const Header: React.FC<HeaderProps> = ({ title = "Dashboard", tenantName }) => {
                     </div>
                 )}
 
+                {/* Control Panel Toggle */}
+                {headerConfig.showControlPanel && (
+                    <div className="relative group">
+                        <button className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                            <LayoutGrid size={20} />
+                        </button>
+                        <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-xl border border-slate-200 z-50 animate-fadeIn origin-top-right hidden group-hover:block">
+                            <div className="p-4 border-b border-slate-100 bg-slate-50 rounded-t-xl">
+                                <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center">
+                                    <LayoutGrid size={14} className="mr-2 text-indigo-500" />
+                                    სამართავი პანელი
+                                </h3>
+                            </div>
+                            <div className="p-2 grid grid-cols-2 gap-2">
+                                <button className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-600 hover:text-indigo-600">
+                                    <Settings size={20} className="mb-2 opacity-50" />
+                                    <span className="text-[10px] font-bold">პარამეტრები</span>
+                                </button>
+                                <button className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-600 hover:text-indigo-600">
+                                    <User size={20} className="mb-2 opacity-50" />
+                                    <span className="text-[10px] font-bold">პროფილი</span>
+                                </button>
+                                <button className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-600 hover:text-indigo-600">
+                                    <Bell size={20} className="mb-2 opacity-50" />
+                                    <span className="text-[10px] font-bold">Alerts</span>
+                                </button>
+                                <button className="flex flex-col items-center justify-center p-3 hover:bg-slate-50 rounded-xl transition-colors text-slate-600 hover:text-indigo-600">
+                                    <LogOut size={20} className="mb-2 opacity-50" />
+                                    <span className="text-[10px] font-bold">გასვლა</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Note Board Toggle */}
                 {headerConfig.showBookmark && (
                     <div className="relative" ref={notePanelRef}>
@@ -343,6 +380,9 @@ const Header: React.FC<HeaderProps> = ({ title = "Dashboard", tenantName }) => {
                         )}
                     </div>
                 )}
+
+                {/* Branch Switcher */}
+                <BranchSwitcher />
 
                 <div className="flex items-center space-x-3 pl-6 border-l border-slate-100">
                     <div className="text-right hidden sm:block">

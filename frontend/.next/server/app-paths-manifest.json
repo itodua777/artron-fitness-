@@ -1,8 +1,9 @@
 {
-  "/(main)/passes/library/page": "app/(main)/passes/library/page.js",
+  "/(main)/dashboard/page": "app/(main)/dashboard/page.js",
   "/(main)/users/page": "app/(main)/users/page.js",
-  "/(main)/corporate/page": "app/(main)/corporate/page.js",
-  "/(main)/settings/page": "app/(main)/settings/page.js",
-  "/(main)/users/[id]/page": "app/(main)/users/[id]/page.js",
-  "/(main)/users/add/page": "app/(main)/users/add/page.js"
+  "/(main)/market/page": "app/(main)/market/page.js",
+  "/(main)/promotions/page": "app/(main)/promotions/page.js",
+  "/(main)/statistics/page": "app/(main)/statistics/page.js",
+  "/(main)/users/add/page": "app/(main)/users/add/page.js",
+  "/(main)/employees/page": "app/(main)/employees/page.js"
 }

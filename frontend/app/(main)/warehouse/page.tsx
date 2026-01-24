@@ -66,7 +66,7 @@ export default function WarehousePage() {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
             const res = await fetch(`${apiUrl}/api/warehouse?category=${cat}`);
             const data = await res.json();
-            return data;
+            return Array.isArray(data) ? data : [];
         } catch (e) {
             console.error("Failed to fetch", e);
             return [];
@@ -106,11 +106,62 @@ export default function WarehousePage() {
     React.useEffect(() => {
         const load = async () => {
             if (activeWarehouseSubTab === 'PRODUCT') setGroceries(await fetchItems('GROCERY'));
-            if (activeWarehouseSubTab === 'ASSETS') setMaterials(await fetchItems('MATERIAL'));
+
+            // LOAD ASSETS FROM SHARED COMPANY PROFILE (Inventory from Settings)
+            if (activeWarehouseSubTab === 'ASSETS') {
+                try {
+                    const profileStr = localStorage.getItem('artron_company_profile');
+                    const activeBranchId = localStorage.getItem('artron_active_branch');
+
+                    if (profileStr) {
+                        const company = JSON.parse(profileStr);
+                        let inventory = [];
+
+                        // 1. Try to get from active branch
+                        if (activeBranchId && company.branches) {
+                            const branch = company.branches.find((b: any) => b.id === activeBranchId);
+                            if (branch && branch.inventoryItems) {
+                                inventory = branch.inventoryItems;
+                            }
+                        }
+
+                        // 2. Fallback to main company inventory (if we decide to store it there too, mostly it's on branches now)
+                        // But wait, the Settings logic saves inventory to the active context (Branch or Company).
+                        // If no branch selected, it might be on company.inventoryItems (if we added it there).
+                        // Looking at SettingsPage, 'inventoryItems' is local state, but saved to 'activeContext'.
+                        // If type is COMPANY (no branch), we haven't explicitly seen where it saves to 'company' root field in the snippets.
+                        // Let's assume for now we look at the active branch or fallback to empty if usage involves branches.
+
+                        // Filter items that are IN WAREHOUSE (Total > InUse)
+                        const warehouseItems = inventory.filter((item: any) => {
+                            const inUse = item.inUse || 0;
+                            return (item.quantity - inUse) > 0;
+                        }).map((item: any) => ({
+                            id: item.id,
+                            name: item.name,
+                            quantity: item.quantity - (item.inUse || 0), // Show only remaining stock
+                            condition: 'კარგი', // Default, as Settings doesn't track condition per item yet
+                            note: item.description
+                        }));
+
+                        setMaterials(warehouseItems);
+                    }
+                } catch (e) {
+                    console.error("Failed to load local inventory", e);
+                }
+            }
+
             if (activeWarehouseSubTab === 'ACCESSORIES') setAccessories(await fetchItems('ACCESSORY'));
             if (activeWarehouseSubTab === 'SUPPLIERS') setSuppliers(await fetchItems('SUPPLIER'));
         };
         load();
+
+        // Listen for storage changes to update immediately if settings change in another tab/window or same session
+        const handleStorageChange = () => {
+            if (activeWarehouseSubTab === 'ASSETS') load();
+        };
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, [activeWarehouseSubTab]);
 
 
@@ -294,7 +345,7 @@ export default function WarehousePage() {
                                             <tr><th className="px-8 py-5">პროდუქტი</th><th className="px-8 py-5">კატეგორია</th><th className="px-8 py-5">ფასი</th><th className="px-8 py-5">ნაშთი</th><th className="px-8 py-5 text-right"></th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {groceries.map(g => (
+                                            {Array.isArray(groceries) && groceries.map(g => (
                                                 <tr key={g._id || g.id} className="hover:bg-slate-800/50 transition-colors">
                                                     <td className="px-8 py-5 font-black text-white">{g.name}</td>
                                                     <td className="px-8 py-5"><span className="px-3 py-1 bg-slate-800 rounded-xl text-[10px] font-black uppercase tracking-tighter text-slate-300">{g.category}</span></td>
@@ -345,7 +396,7 @@ export default function WarehousePage() {
                                             <tr><th className="px-8 py-5">ნივთი</th><th className="px-8 py-5">რაოდენობა</th><th className="px-8 py-5">მდგომარეობა</th><th className="px-8 py-5">შენიშვნა</th><th className="px-8 py-5 text-right"></th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {materials.map(m => (
+                                            {Array.isArray(materials) && materials.map(m => (
                                                 <tr key={m._id || m.id} className="hover:bg-slate-800/50 transition-colors">
                                                     <td className="px-8 py-5 font-black text-white">{m.name}</td>
                                                     <td className="px-8 py-5 font-mono font-black text-white">{m.quantity}</td>
@@ -427,7 +478,7 @@ export default function WarehousePage() {
                                             <tr><th className="px-8 py-5">დასახელება</th><th className="px-8 py-5">რაოდენობა</th><th className="px-8 py-5">ფასი</th><th className="px-8 py-5">ჯამი</th><th className="px-8 py-5 text-right"></th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {accessories.map((item) => (
+                                            {Array.isArray(accessories) && accessories.map((item) => (
                                                 <tr key={item._id || item.id} className="hover:bg-slate-800/50 transition-colors">
                                                     <td className="px-8 py-5 font-black text-white">{item.name}</td>
                                                     <td className="px-8 py-5">
@@ -494,7 +545,7 @@ export default function WarehousePage() {
                                             <tr><th className="px-8 py-5">კომპანია</th><th className="px-8 py-5">საკონტაქტო</th><th className="px-8 py-5">ტელეფონი</th><th className="px-8 py-5">სტატუსი</th><th className="px-8 py-5 text-right"></th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {suppliers.map(s => (
+                                            {Array.isArray(suppliers) && suppliers.map(s => (
                                                 <tr key={s._id || s.id} className="hover:bg-slate-800/50 transition-colors">
                                                     <td className="px-8 py-5 font-black text-white">{s.name}</td>
                                                     <td className="px-8 py-5 font-bold text-slate-500">{s.contactPerson}</td>

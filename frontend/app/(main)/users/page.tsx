@@ -89,7 +89,7 @@ export default function UserListPage() {
             .then(data => {
                 if (Array.isArray(data)) {
                     setUsers(data.map((m: any) => ({
-                        id: m._id,
+                        id: m.id,
                         name: m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim(),
                         phone: m.phone || '',
                         status: m.status || 'Active', // Defaulting to Active if missing

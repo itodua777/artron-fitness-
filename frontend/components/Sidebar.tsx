@@ -24,7 +24,8 @@ import {
     Watch,
     User,
     List,
-    Calendar
+    Calendar,
+    GitBranch
 } from 'lucide-react';
 import { useLanguage } from '../app/contexts/LanguageContext';
 
@@ -107,6 +108,7 @@ const Sidebar = () => {
         { id: 'messages', href: '/messages', label: t('menu.messages'), icon: <MessageSquare size={20} /> },
         { id: 'accounting', href: '/accounting', label: t('menu.accounting'), icon: <Calculator size={20} /> },
         { id: 'statistics', href: '/statistics', label: t('menu.statistics'), icon: <BarChart2 size={20} /> },
+        { id: 'branches', href: '/branches', label: 'ფილიალები', icon: <GitBranch size={20} /> },
         { id: 'settings', href: '/settings', label: t('menu.settings'), icon: <Settings size={20} /> },
     ];
 
@@ -170,6 +172,12 @@ const Sidebar = () => {
                             }
                             if (requiredModule && !selectedModules[requiredModule]) return null;
                         }
+                    }
+
+                    // Branch Management Visibility
+                    if (item.id === 'branches') {
+                        // Show only if branches exist in profile
+                        if (!companyProfile?.branches || companyProfile.branches.length === 0) return null;
                     }
 
                     if (item.isGroup) {

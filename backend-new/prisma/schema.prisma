@@ -9,9 +9,14 @@ datasource db {
 
 model Company {
   id        String   @id @default(uuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  name        String
+  identCode   String?
+  legalAddress String?
+  activityField String?
+  brandName   String?
+  logo        String? // Base64 or URL
+  
+  updatedAt   DateTime @updatedAt
   branches  Branch[]
 }
 
@@ -24,6 +29,8 @@ model Branch {
   updatedAt   DateTime     @updatedAt
   departments Department[]
   users       User[]
+  members     Member[]
+  passes      Pass[]
 }
 
 model Department {
@@ -79,4 +86,83 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// --- Migrated Models ---
+
+model Member {
+  id        String   @id @default(uuid())
+  
+  // Personal Info
+  name      String
+  email     String?
+  phone     String?
+  personalId String?
+  citizenship String @default("GE")
+  passportNumber String?
+  address   String?
+  photo     String?
+  
+  // Status
+  status    String   @default("Active") // Active, Inactive, Banned
+  joinedDate DateTime @default(now())
+  
+  // Corporate
+  isCorporate Boolean @default(false)
+  companyName String?
+  groupId     String?
+  groupType   String?
+
+  // Guardian (Minors)
+  guardianFirstName String?
+  guardianLastName  String?
+  guardianPersonalId String?
+  guardianPhone     String?
+
+  // Access Control
+  accessMobile   Boolean @default(false)
+  accessBracelet Boolean @default(false)
+  accessCard     Boolean @default(false)
+  braceletCode   String?
+  cardCode       String?
+
+  // Medical
+  healthCert     String? // URL
+  birthCert      String? // URL
+
+  // Relations
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Pass {
+  id          String   @id @default(uuid())
+  title       String
+  price       Decimal  @db.Decimal(10, 2)
+  duration    Int      // in days
+  description String?
+  features    String?
+  active      Boolean  @default(true)
+  
+  // Type & Schedule
+  type        String   @default("INDIVIDUAL") // INDIVIDUAL, GROUP, CALENDAR, MIXED
+  timeMode    String   @default("full")       // full, custom
+  startTime   String?  // "09:00"
+  endTime     String?  // "22:00"
+  days        String[] // ["Mon", "Wed"]
+
+  // Restrictions
+  maxParticipants Int @default(1)
+  targetAge       String?
+  targetStatus    String?
+
+  // Relations
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

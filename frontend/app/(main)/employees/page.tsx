@@ -57,10 +57,24 @@ export default function EmployeesPage() {
 
     const fetchEmployees = async () => {
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/employees`);
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/users`);
             if (res.ok) {
                 const data = await res.json();
-                setEmployees(data);
+                // Map User to Employee type
+                const mapped = data.map((u: any) => ({
+                    id: u.id,
+                    firstName: u.firstName,
+                    lastName: u.lastName,
+                    fullName: `${u.firstName} ${u.lastName}`,
+                    phone: u.phone,
+                    email: u.email,
+                    position: u.role?.name || 'სხვა',
+                    department: u.role?.department?.name || u.branch?.name || '',
+                    salary: 0, // Not exposed in User model yet
+                    status: 'Active',
+                    joinDate: new Date(u.createdAt).toLocaleDateString('ka-GE')
+                }));
+                setEmployees(mapped);
             }
         } catch (error) {
             console.error('Error fetching employees:', error);
@@ -645,7 +659,7 @@ export default function EmployeesPage() {
                             </thead>
                             <tbody className="divide-y divide-slate-800">
                                 {filteredEmployees.map(emp => (
-                                    <tr key={emp.id} onClick={() => { setSelectedEmployee(emp); setViewMode('DETAIL'); }} className="hover:bg-slate-800/50 cursor-pointer group transition-colors">
+                                    <tr key={emp.id} onClick={() => window.location.href = `/employees/${emp.id}`} className="hover:bg-slate-800/50 cursor-pointer group transition-colors">
                                         <td className="px-8 py-5">
                                             <div className="flex items-center space-x-4">
                                                 <div className="w-12 h-12 rounded-2xl bg-[#0d1117] flex items-center justify-center font-black text-slate-500 border-4 border-slate-800 shadow-sm">{(emp.fullName || emp.firstName || '').charAt(0)}</div>
