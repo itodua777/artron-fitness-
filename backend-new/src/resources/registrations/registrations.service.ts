@@ -14,8 +14,11 @@ export class RegistrationsService {
                     name: dto.name,
                     identCode: dto.identCode,
                     legalAddress: dto.legalAddress,
+                    country: dto.country,
+                    city: dto.city,
                     activityField: dto.activityField,
                     brandName: dto.brandName,
+                    interviewDate: dto.interviewDate ? new Date(dto.interviewDate) : undefined,
                 },
             });
 
@@ -39,15 +42,12 @@ export class RegistrationsService {
             });
 
             // 3. Create Director User
-            const [firstName, ...lastNameParts] = dto.directorName.split(' ');
-            const lastName = lastNameParts.join(' ') || '';
-
             const director = await tx.user.create({
                 data: {
                     email: dto.directorEmail,
                     password: 'CHANGE_ME_123', // In real app, hash this
-                    firstName: firstName || dto.directorName,
-                    lastName: lastName,
+                    firstName: dto.directorFirstName,
+                    lastName: dto.directorLastName,
                     phone: dto.directorPhone,
                     branchId: branch.id,
                     // roleId: null for now, or fetch a default role

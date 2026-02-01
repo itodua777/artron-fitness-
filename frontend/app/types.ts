@@ -9,6 +9,7 @@ export interface User {
     status: 'Active' | 'Pending' | 'Inactive';
     activePackageName?: string | null;
     personalId?: string;
+    citizenship?: string;
     address?: string;
     joinedDate?: string;
     tenantName?: string;

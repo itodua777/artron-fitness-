@@ -12,6 +12,8 @@ import { RegistrationsModule } from './resources/registrations/registrations.mod
 import { AuthModule } from './resources/auth/auth.module';
 import { TenantsModule } from './resources/tenants/tenants.module';
 import { UsersModule } from './resources/users/users.module';
+import { WarehouseModule } from './resources/warehouse/warehouse.module';
+import { ProductsModule } from './resources/products/products.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -25,12 +27,13 @@ import { AppService } from './app.service';
     BranchesModule,
     DepartmentsModule,
     MembersModule,
-    MembersModule,
     PassesModule,
     RegistrationsModule,
     AuthModule,
     TenantsModule,
     UsersModule,
+    WarehouseModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

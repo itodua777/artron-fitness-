@@ -8,7 +8,8 @@ import {
     ChevronRight, ArrowRight, UserCheck, HeartPulse,
     Smartphone, Upload, FileCheck, Baby, Trash2, Plus,
     RefreshCw, Fingerprint, Target, Sparkles, Building2,
-    CheckCircle2, Search, ChevronsUpDown
+
+    CheckCircle2, Search, ChevronsUpDown, Accessibility, Shirt, Megaphone
 } from 'lucide-react';
 import { CorporateClient } from '@/app/types';
 import { COUNTRIES } from '@/app/countries';
@@ -42,6 +43,9 @@ interface GroupMember {
     // Citizenship
     citizenship: string;
     passportNumber?: string;
+    guardianPhoneCode?: string;
+    bloodGroup: string;
+    isPwd: boolean;
 }
 
 export default function AddUserPage() {
@@ -52,12 +56,27 @@ export default function AddUserPage() {
     // Corporate linking state
     const [isCorporateUser, setIsCorporateUser] = useState(false);
     const [selectedCompanyId, setSelectedCompanyId] = useState('');
+    const [verificationId, setVerificationId] = useState('');
+    const [verificationStatus, setVerificationStatus] = useState<'IDLE' | 'VERIFYING' | 'SUCCESS' | 'ERROR'>('IDLE');
+
+    const handleCorporateVerification = () => {
+        if (!verificationId) return;
+        setVerificationStatus('VERIFYING');
+        // Mock API Call
+        setTimeout(() => {
+            if (verificationId.length > 5) {
+                setVerificationStatus('SUCCESS');
+            } else {
+                setVerificationStatus('ERROR');
+            }
+        }, 1500);
+    };
 
     // Group Members State
     const [groupSize, setGroupSize] = useState<number>(2);
     const [members, setMembers] = useState<GroupMember[]>([
-        { id: '1', firstName: '', lastName: '', personalId: '', dob: '', age: null, gender: 'Male', idCardFile: null, birthCertFile: null, healthCertFile: null, photo: null, guardianFirstName: '', guardianLastName: '', guardianPersonalId: '', guardianPhone: '', citizenship: 'GE' },
-        { id: '2', firstName: '', lastName: '', personalId: '', dob: '', age: null, gender: 'Male', idCardFile: null, birthCertFile: null, healthCertFile: null, photo: null, guardianFirstName: '', guardianLastName: '', guardianPersonalId: '', guardianPhone: '', citizenship: 'GE' },
+        { id: '1', firstName: '', lastName: '', personalId: '', dob: '', age: null, gender: 'Male', bloodGroup: '1', isPwd: false, idCardFile: null, birthCertFile: null, healthCertFile: null, photo: null, guardianFirstName: '', guardianLastName: '', guardianPersonalId: '', guardianPhone: '', guardianPhoneCode: '+995', citizenship: 'GE' },
+        { id: '2', firstName: '', lastName: '', personalId: '', dob: '', age: null, gender: 'Male', bloodGroup: '1', isPwd: false, idCardFile: null, birthCertFile: null, healthCertFile: null, photo: null, guardianFirstName: '', guardianLastName: '', guardianPersonalId: '', guardianPhone: '', guardianPhoneCode: '+995', citizenship: 'GE' },
     ]);
 
     // Shared contact info
@@ -66,12 +85,16 @@ export default function AddUserPage() {
         email: '',
         address: ''
     });
+    const [phoneCode, setPhoneCode] = useState('+995');
 
     // Group Profiling State
     const [groupProfiling, setGroupProfiling] = useState({
         experience: 'დამწყები (Beginner)',
         mainGoal: 'ზოგადი (General)',
-        customGoal: ''
+        customGoal: '',
+        clothingSize: 'M',
+        source: '',
+        customSource: ''
     });
 
     // Sync group size with members array
@@ -95,7 +118,10 @@ export default function AddUserPage() {
                     guardianLastName: '',
                     guardianPersonalId: '',
                     guardianPhone: '',
-                    citizenship: 'GE'
+                    guardianPhoneCode: '+995',
+                    citizenship: 'GE',
+                    bloodGroup: '1',
+                    isPwd: false
                 }));
                 setMembers([...members, ...newMembers]);
             } else if (members.length > groupSize) {
@@ -141,9 +167,11 @@ export default function AddUserPage() {
             const payloadMembers = members.map(member => ({
                 name: `${member.firstName} ${member.lastName}`,
                 email: contactInfo.email || null, // Shared email for group for now, or could be individual if UI allowed
-                phone: contactInfo.phone || null,
+                phone: contactInfo.phone ? `${phoneCode}${contactInfo.phone}` : null,
                 personalId: member.personalId,
                 address: contactInfo.address,
+                bloodGroup: member.bloodGroup,
+                isPwd: member.isPwd,
                 status: 'Active',
                 joinedDate: new Date().toLocaleDateString('ka-GE', { day: 'numeric', month: 'short', year: 'numeric' }),
                 isCorporate: isCorporateUser,
@@ -154,13 +182,17 @@ export default function AddUserPage() {
                     guardianFirstName: member.guardianFirstName,
                     guardianLastName: member.guardianLastName,
                     guardianPersonalId: member.guardianPersonalId,
-                    guardianPhone: member.guardianPhone
+                    guardianPhone: member.guardianPhone ? `${member.guardianPhoneCode || '+995'}${member.guardianPhone}` : null
                 } : {}),
                 citizenship: member.citizenship || 'GE',
                 passportNumber: member.passportNumber,
                 // Add profiling info to payload (if schema supports, or valid extra fields)
                 experience: groupProfiling.experience,
-                goal: groupProfiling.mainGoal === 'custom' ? groupProfiling.customGoal : groupProfiling.mainGoal
+                goal: groupProfiling.mainGoal === 'custom' ? groupProfiling.customGoal : groupProfiling.mainGoal,
+                experience: groupProfiling.experience,
+                goal: groupProfiling.mainGoal === 'custom' ? groupProfiling.customGoal : groupProfiling.mainGoal,
+                clothingSize: groupProfiling.clothingSize,
+                source: groupProfiling.source === 'other' ? groupProfiling.customSource : groupProfiling.source
             }));
 
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
@@ -310,17 +342,33 @@ export default function AddUserPage() {
                                                     <Phone size={18} className="mr-2" /> საკონტაქტო ინფორმაცია
                                                 </h3>
                                                 <div className="space-y-4">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="space-y-1.5">
-                                                            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მობილური</label>
-                                                            <div className="relative">
-                                                                <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                    <div className="grid grid-cols-1 gap-4">
+                                                        <div className="flex gap-4">
+                                                            <div className="space-y-1.5 w-[125px] shrink-0">
+                                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ქვეყნის კოდი</label>
+                                                                <div className="relative">
+                                                                    <select
+                                                                        value={phoneCode}
+                                                                        onChange={e => setPhoneCode(e.target.value)}
+                                                                        className="w-full pl-3 pr-8 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-blue-500 outline-none appearance-none cursor-pointer font-mono text-sm"
+                                                                    >
+                                                                        {COUNTRIES.map(c => (
+                                                                            <option key={c.code} value={c.phoneCode}>
+                                                                                {c.code} {c.phoneCode}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <ChevronsUpDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                                                </div>
+                                                            </div>
+                                                            <div className="space-y-1.5 flex-1">
+                                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მობილური</label>
                                                                 <input
                                                                     type="tel"
                                                                     value={contactInfo.phone}
                                                                     onChange={e => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                                                                    placeholder="+995..."
-                                                                    className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500"
+                                                                    placeholder="555..."
+                                                                    className="w-full px-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 font-mono"
                                                                 />
                                                             </div>
                                                         </div>
@@ -399,6 +447,58 @@ export default function AddUserPage() {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ტანსაცმლის ზომა</label>
+                                                        <div className="relative">
+                                                            <Shirt size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                            <select
+                                                                value={groupProfiling.clothingSize}
+                                                                onChange={(e) => setGroupProfiling({ ...groupProfiling, clothingSize: e.target.value })}
+                                                                className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 appearance-none"
+                                                            >
+                                                                <option>XS</option>
+                                                                <option>S</option>
+                                                                <option>M</option>
+                                                                <option>L</option>
+                                                                <option>XL</option>
+                                                                <option>XXL</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[10px] font-black uppercase text-slate-500 ml-1">საიდან გაიგეთ ჩვენს შესახებ?</label>
+                                                        <div className="space-y-2">
+                                                            <div className="relative">
+                                                                <Megaphone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                                <select
+                                                                    value={groupProfiling.source}
+                                                                    onChange={(e) => setGroupProfiling({ ...groupProfiling, source: e.target.value })}
+                                                                    className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 appearance-none"
+                                                                >
+                                                                    <option value="">აირჩიეთ...</option>
+                                                                    <option value="Noticed the physical location">შენიშნა ფილიალი (Location)</option>
+                                                                    <option value="Referral">რეკომენდაცია (Referral)</option>
+                                                                    <option value="Gym Website">ვებგვერდი (Website)</option>
+                                                                    <option value="Google Maps search">Google Maps</option>
+                                                                    <option value="Social Media">სოციალური ქსელი</option>
+                                                                    <option value="Search engine">საძიებო სისტემა</option>
+                                                                    <option value="Online advertisement">ონლაინ რეკლამა</option>
+                                                                    <option value="Friend">მეგობარი (Friend)</option>
+                                                                    <option value="other">სხვა (Other)</option>
+                                                                </select>
+                                                            </div>
+                                                            {groupProfiling.source === 'other' && (
+                                                                <input
+                                                                    type="text"
+                                                                    value={groupProfiling.customSource}
+                                                                    onChange={(e) => setGroupProfiling({ ...groupProfiling, customSource: e.target.value })}
+                                                                    placeholder="მიუთითეთ წყარო..."
+                                                                    className="w-full px-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 animate-fadeIn"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+
 
                                                     <div className="h-px bg-slate-800"></div>
 
@@ -418,7 +518,11 @@ export default function AddUserPage() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setIsCorporateUser(!isCorporateUser);
-                                                                    if (isCorporateUser) setSelectedCompanyId('');
+                                                                    if (isCorporateUser) {
+                                                                        setSelectedCompanyId('');
+                                                                        setVerificationStatus('IDLE');
+                                                                        setVerificationId('');
+                                                                    }
                                                                 }}
                                                                 className={`w-12 h-6 rounded-full relative transition-all ${isCorporateUser ? 'bg-amber-400' : 'bg-slate-800'}`}
                                                             >
@@ -432,7 +536,11 @@ export default function AddUserPage() {
                                                                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1">აირჩიეთ კომპანია</label>
                                                                     <select
                                                                         value={selectedCompanyId}
-                                                                        onChange={e => setSelectedCompanyId(e.target.value)}
+                                                                        onChange={e => {
+                                                                            setSelectedCompanyId(e.target.value);
+                                                                            setVerificationStatus('IDLE');
+                                                                            setVerificationId('');
+                                                                        }}
                                                                         className="w-full px-4 py-3 bg-[#161b22] border border-slate-700 rounded-xl font-bold text-white outline-none focus:border-amber-400 appearance-none"
                                                                     >
                                                                         <option value="">აირჩიეთ სიიდან...</option>
@@ -442,7 +550,43 @@ export default function AddUserPage() {
                                                                     </select>
                                                                 </div>
 
-                                                                {selectedCompany && (
+                                                                {selectedCompany && verificationStatus !== 'SUCCESS' && (
+                                                                    <div className="space-y-4 pt-2">
+                                                                        <div className="space-y-1.5">
+                                                                            <label className="text-[9px] font-black uppercase text-slate-500 ml-1">თანამშრომლის ID / კორპორატიული მეილი</label>
+                                                                            <input
+                                                                                type="text"
+                                                                                value={verificationId}
+                                                                                onChange={(e) => setVerificationId(e.target.value)}
+                                                                                placeholder="ჩაწერეთ მონაცემი..."
+                                                                                className={`w-full px-4 py-3 bg-[#161b22] border rounded-xl font-bold text-white outline-none transition-all ${verificationStatus === 'ERROR' ? 'border-red-500/50 focus:border-red-500' : 'border-slate-700 focus:border-amber-400'}`}
+                                                                            />
+                                                                            {verificationStatus === 'ERROR' && (
+                                                                                <p className="text-[10px] text-red-400 font-bold ml-1">მონაცემი ვერ მოიძებნა ბაზაში</p>
+                                                                            )}
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={handleCorporateVerification}
+                                                                            disabled={!verificationId || verificationStatus === 'VERIFYING'}
+                                                                            className="w-full py-3 bg-amber-400/90 hover:bg-amber-400 text-slate-900 font-black rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                                                                        >
+                                                                            {verificationStatus === 'VERIFYING' ? (
+                                                                                <>
+                                                                                    <RefreshCw size={16} className="animate-spin" />
+                                                                                    <span>მოწმდება...</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <Search size={16} strokeWidth={3} />
+                                                                                    <span>გადამოწმება</span>
+                                                                                </>
+                                                                            )}
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+
+                                                                {selectedCompany && verificationStatus === 'SUCCESS' && (
                                                                     <div className="p-4 bg-amber-400/10 border border-amber-400/20 rounded-2xl flex items-center justify-between">
                                                                         <div className="flex items-center space-x-3">
                                                                             <CheckCircle2 size={18} className="text-amber-400" />
@@ -463,6 +607,7 @@ export default function AddUserPage() {
                                                 </div>
                                             </div>
                                         </div>
+
                                     </div>
                                 ) : (
                                     members.map((member, idx) => (
@@ -493,16 +638,32 @@ export default function AddUserPage() {
                                             <Phone size={18} className="mr-2" /> საკონტაქტო პირი
                                         </h3>
                                         <div className="space-y-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მთავარი ტელეფონი</label>
-                                                <div className="relative">
-                                                    <Phone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                            <div className="flex gap-4">
+                                                <div className="space-y-1.5 w-[125px] shrink-0">
+                                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ქვეყნის კოდი</label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={phoneCode}
+                                                            onChange={e => setPhoneCode(e.target.value)}
+                                                            className="w-full pl-3 pr-8 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-blue-500 outline-none appearance-none cursor-pointer font-mono text-sm"
+                                                        >
+                                                            {COUNTRIES.map(c => (
+                                                                <option key={c.code} value={c.phoneCode}>
+                                                                    {c.code} {c.phoneCode}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <ChevronsUpDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5 flex-1">
+                                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მთავარი ტელეფონი</label>
                                                     <input
                                                         type="tel"
                                                         value={contactInfo.phone}
                                                         onChange={e => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                                                        placeholder="+995..."
-                                                        className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500"
+                                                        placeholder="555..."
+                                                        className="w-full px-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 font-mono"
                                                     />
                                                 </div>
                                             </div>
@@ -578,6 +739,57 @@ export default function AddUserPage() {
                                                     )}
                                                 </div>
                                             </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ტანსაცმლის ზომა</label>
+                                                <div className="relative">
+                                                    <Shirt size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                    <select
+                                                        value={groupProfiling.clothingSize}
+                                                        onChange={(e) => setGroupProfiling({ ...groupProfiling, clothingSize: e.target.value })}
+                                                        className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 appearance-none"
+                                                    >
+                                                        <option>XS</option>
+                                                        <option>S</option>
+                                                        <option>M</option>
+                                                        <option>L</option>
+                                                        <option>XL</option>
+                                                        <option>XXL</option>
+                                                    </select>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">საიდან გაიგეთ ჩვენს შესახებ?</label>
+                                                    <div className="space-y-2">
+                                                        <div className="relative">
+                                                            <Megaphone size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                            <select
+                                                                value={groupProfiling.source}
+                                                                onChange={(e) => setGroupProfiling({ ...groupProfiling, source: e.target.value })}
+                                                                className="w-full pl-10 pr-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 appearance-none"
+                                                            >
+                                                                <option value="">აირჩიეთ...</option>
+                                                                <option value="Noticed the physical location">შენიშნა ფილიალი (Location)</option>
+                                                                <option value="Referral">რეკომენდაცია (Referral)</option>
+                                                                <option value="Gym Website">ვებგვერდი (Website)</option>
+                                                                <option value="Google Maps search">Google Maps</option>
+                                                                <option value="Social Media">სოციალური ქსელი</option>
+                                                                <option value="Search engine">საძიებო სისტემა</option>
+                                                                <option value="Online advertisement">ონლაინ რეკლამა</option>
+                                                                <option value="Friend">მეგობარი (Friend)</option>
+                                                                <option value="other">სხვა (Other)</option>
+                                                            </select>
+                                                        </div>
+                                                        {groupProfiling.source === 'other' && (
+                                                            <input
+                                                                type="text"
+                                                                value={groupProfiling.customSource}
+                                                                onChange={(e) => setGroupProfiling({ ...groupProfiling, customSource: e.target.value })}
+                                                                placeholder="მიუთითეთ წყარო..."
+                                                                className="w-full px-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 animate-fadeIn"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -613,8 +825,8 @@ export default function AddUserPage() {
                         </div>
                     </form>
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 
@@ -914,6 +1126,24 @@ const MemberForm = ({ index, member, onChange, fileRefs, isIndividual }: any) =>
                     </select>
                 </div>
                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">სისხლის ჯგუფი</label>
+                    <select
+                        value={member.bloodGroup}
+                        onChange={e => onChange('bloodGroup', e.target.value)}
+                        className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-blue-500 appearance-none"
+                    >
+                        <option value="1">1 - არ ვიცი</option>
+                        <option value="2">2 - O (I) Rh+</option>
+                        <option value="3">3 - O (I) Rh-</option>
+                        <option value="4">4 - A (II) Rh+</option>
+                        <option value="5">5 - A (II) Rh-</option>
+                        <option value="6">6 - B (III) Rh+</option>
+                        <option value="7">7 - B (III) Rh-</option>
+                        <option value="8">8 - AB (IV) Rh+</option>
+                        <option value="9">9 - AB (IV) Rh-</option>
+                    </select>
+                </div>
+                <div className="space-y-1.5">
                     <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ID ბარათი / პასპორტი</label>
                     <input
                         type="file"
@@ -945,6 +1175,17 @@ const MemberForm = ({ index, member, onChange, fileRefs, isIndividual }: any) =>
                     >
                         {member.healthCertFile ? <FileCheck size={16} /> : <HeartPulse size={16} />}
                         <span>{member.healthCertFile ? 'ატვირთულია' : 'ატვირთვა'}</span>
+                    </button>
+                </div>
+                <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1">სტატუსი</label>
+                    <button
+                        type="button"
+                        onClick={() => onChange('isPwd', !member.isPwd)}
+                        className={`w-full py-3 border-2 border-dashed rounded-xl flex items-center justify-center space-x-2 text-xs font-black uppercase transition-all ${member.isPwd ? 'border-purple-500 text-purple-500 bg-purple-500/10' : 'border-slate-800 text-slate-500 hover:border-purple-500 hover:text-purple-400'}`}
+                    >
+                        <Accessibility size={16} />
+                        <span>{member.isPwd ? 'შშმ პირი' : 'შშმპ მონიშვნა'}</span>
                     </button>
                 </div>
             </div>
@@ -989,15 +1230,34 @@ const MemberForm = ({ index, member, onChange, fileRefs, isIndividual }: any) =>
                                 className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-orange-500 transition-all"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მეურვის ტელეფონი</label>
-                            <input
-                                type="tel"
-                                value={member.guardianPhone || ''}
-                                onChange={e => onChange('guardianPhone', e.target.value)}
-                                placeholder="+995..."
-                                className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-orange-500 transition-all"
-                            />
+                        <div className="flex gap-4">
+                            <div className="space-y-1.5 w-[125px] shrink-0">
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">ქვეყნის კოდი</label>
+                                <div className="relative">
+                                    <select
+                                        value={member.guardianPhoneCode || '+995'}
+                                        onChange={e => onChange('guardianPhoneCode', e.target.value)}
+                                        className="w-full pl-3 pr-8 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-orange-500 outline-none appearance-none cursor-pointer font-mono text-sm"
+                                    >
+                                        {COUNTRIES.map(c => (
+                                            <option key={c.code} value={c.phoneCode}>
+                                                {c.code} {c.phoneCode}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <ChevronsUpDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5 flex-1">
+                                <label className="text-[10px] font-black uppercase text-slate-500 ml-1">მეურვის ტელეფონი</label>
+                                <input
+                                    type="tel"
+                                    value={member.guardianPhone || ''}
+                                    onChange={e => onChange('guardianPhone', e.target.value)}
+                                    placeholder="555..."
+                                    className="w-full px-4 py-3 bg-[#0d1117] border border-slate-800 rounded-xl font-bold text-white outline-none focus:border-orange-500 transition-all font-mono"
+                                />
+                            </div>
                         </div>
                     </div>
 

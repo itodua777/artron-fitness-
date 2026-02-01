@@ -14,7 +14,7 @@ export default function MainLayout({
         <LanguageProvider>
             <div className="flex bg-slate-50 h-screen font-sans text-slate-900 overflow-hidden animate-fadeIn">
                 <Sidebar />
-                <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+                <div className="flex-1 flex flex-col h-full relative overflow-hidden min-w-0">
                     {/* Header Title will need to be dynamic per page, but for now generic. 
                  Ideally, Header uses a context or Zustand to set title, or we pass it down if we move Header into pages.
                  Here we use a generic Header and let pages potentially update title via a Context or just generic 'Dashboard'. 

@@ -120,6 +120,8 @@ export default function EmployeesPage() {
         contractFile: null as File | null
     });
 
+    const [phoneCode, setPhoneCode] = useState('+995');
+
     // Citizenship & Files State
     const [citizenshipSearch, setCitizenshipSearch] = useState('');
     const [isCitizenshipOpen, setIsCitizenshipOpen] = useState(false);
@@ -205,6 +207,8 @@ export default function EmployeesPage() {
                     data.append(key, formData[key as keyof typeof formData] as string);
                 }
             });
+            // Overwrite phone with full number including code
+            data.set('phone', `${phoneCode}${formData.phone}`);
 
             const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001'}/api/employees`, {
                 method: 'POST',
@@ -357,8 +361,29 @@ export default function EmployeesPage() {
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-slate-400">მობილური <span className="text-red-500">*</span></label>
-                                    <input required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} type="tel" className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-lime-500 outline-none" />
+                                    <div className="flex gap-4">
+                                        <div className="space-y-2 w-[140px] shrink-0">
+                                            <label className="text-sm font-bold text-slate-400">ქვეყნის კოდი</label>
+                                            <div className="relative">
+                                                <select
+                                                    value={phoneCode}
+                                                    onChange={e => setPhoneCode(e.target.value)}
+                                                    className="w-full pl-4 pr-8 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-lime-500 outline-none appearance-none cursor-pointer font-mono text-sm"
+                                                >
+                                                    {COUNTRIES.map(c => (
+                                                        <option key={c.code} value={c.phoneCode}>
+                                                            {c.code} {c.phoneCode}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <ChevronsUpDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 flex-1">
+                                            <label className="text-sm font-bold text-slate-400">მობილური <span className="text-red-500">*</span></label>
+                                            <input required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} type="tel" className="w-full px-4 py-3 rounded-xl border border-slate-700 bg-[#0d1117] text-white focus:border-lime-500 outline-none font-mono" />
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-slate-400">ელ-ფოსტა <span className="text-red-500">*</span></label>

@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
     Globe,
     Check,
@@ -72,10 +73,20 @@ import {
     ArrowRight as ArrowRightIcon,
     ArrowLeft as ArrowLeftIcon,
     User,
-    Link
+    Link,
+    Clock,
+    Star,
+    Trophy,
+    Medal,
+    Calculator,
+    Megaphone,
+    Handshake
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import SignatureModal from '../../../components/settings/SignatureModal';
+import Symbiosis from '../../../components/settings/Symbiosis';
+import ReferralConfigModal from '../../../components/settings/ReferralConfigModal';
+import RatingCalculationConfigModal from '../../../components/settings/RatingCalculationConfigModal';
 import {
     DndContext,
     closestCenter,
@@ -113,6 +124,7 @@ interface Permissions {
     statistics: ModulePermission;
     settings: ModulePermission;
     warehouse: ModulePermission;
+    old_db: ModulePermission;
 }
 
 interface InventoryItem {
@@ -121,6 +133,16 @@ interface InventoryItem {
     description: string;
     quantity: number;
     inUse?: number;
+}
+
+interface RankLevel {
+    id: string;
+    name: string;
+    min: number;
+    max: number;
+    color: string;
+    className?: string; // For Tailwind classes like 'bg-yellow-400'
+    benefits: string;
 }
 
 const PREDEFINED_EQUIPMENT = [
@@ -352,6 +374,7 @@ interface Permissions {
     statistics: ModulePermission;
     settings: ModulePermission;
     warehouse: ModulePermission;
+    old_db: ModulePermission;
 }
 
 interface Position {
@@ -615,11 +638,20 @@ const defaultPermissions: Permissions = {
     statistics: { view: false, create: false, manage: false, del: false },
     settings: { view: false, create: false, manage: false, del: false },
     warehouse: { view: false, create: false, manage: false, del: false },
+    old_db: { view: false, create: false, manage: false, del: false },
 };
 
 export default function SettingsPage() {
+    const searchParams = useSearchParams();
     const { language, setLanguage, t } = useLanguage();
-    const [activeSubView, setActiveSubView] = useState<'MAIN' | 'MODELING' | 'COMPANY' | 'DIGITAL' | 'BANK' | 'STRUCTURE' | 'INSTRUCTIONS' | 'BUILDER' | 'INVENTORY' | 'BRANCHES'>('MAIN');
+    const [activeSubView, setActiveSubView] = useState<'MAIN' | 'MODELING' | 'COMPANY' | 'DIGITAL' | 'BANK' | 'STRUCTURE' | 'INSTRUCTIONS' | 'BUILDER' | 'INVENTORY' | 'BRANCHES' | 'RATING' | 'MARKETING_HUB' | 'COMMUNICATION' | 'PROMOTIONS' | 'CORPORATE'>('MAIN');
+
+    useEffect(() => {
+        const view = searchParams.get('view');
+        if (view) {
+            setActiveSubView(view as any);
+        }
+    }, [searchParams]);
     const [onboardingStep, setOnboardingStep] = useState(() => {
         if (typeof window !== 'undefined') {
             const saved = localStorage.getItem('artron_setup_flow_step');
@@ -657,8 +689,13 @@ export default function SettingsPage() {
         }
         return defaults;
     });
+    const [paymentInterval, setPaymentInterval] = useState(1);
+    const [isActivationModalOpen, setIsActivationModalOpen] = useState(false);
     const [hasGM, setHasGM] = useState(false);
     const [hasBranches, setHasBranches] = useState(false);
+    const [ratingSubTab, setRatingSubTab] = useState<'RATINGS' | 'REFERRAL'>('RATINGS');
+    const [showReferralConfig, setShowReferralConfig] = useState(false);
+    const [showRatingCalculation, setShowRatingCalculation] = useState(false);
     const [isGMModalOpen, setIsGMModalOpen] = useState(false);
 
     const handleGMToggle = (checked: boolean) => {
@@ -936,10 +973,19 @@ export default function SettingsPage() {
     const [maleLockerRooms, setMaleLockerRooms] = useState<number>(0);
     const [maleLockersCount, setMaleLockersCount] = useState<number>(0);
     const [femaleLockerRooms, setFemaleLockerRooms] = useState<number>(0);
+
     const [femaleLockersCount, setFemaleLockersCount] = useState<number>(0);
+    const [minorMaleLockerRooms, setMinorMaleLockerRooms] = useState<number>(0);
+    const [minorMaleLockersCount, setMinorMaleLockersCount] = useState<number>(0);
+    const [minorFemaleLockerRooms, setMinorFemaleLockerRooms] = useState<number>(0);
+    const [minorFemaleLockersCount, setMinorFemaleLockersCount] = useState<number>(0);
     const [bathrooms, setBathrooms] = useState<number>(0);
     const [hasBar, setHasBar] = useState<boolean>(false);
+    const [hasSauna, setHasSauna] = useState<boolean>(false);
     const [blueprint, setBlueprint] = useState<{ name: string; size: string; preview: string | null } | null>(null);
+    const [hasPwd, setHasPwd] = useState<boolean>(false);
+    const [hasRamp, setHasRamp] = useState<boolean>(false);
+    const [hasPwdBathroom, setHasPwdBathroom] = useState<boolean>(false);
     const [rooms, setRooms] = useState<Room[]>([]);
 
     // --- Inventory State ---
@@ -988,7 +1034,263 @@ export default function SettingsPage() {
         }
     };
 
+    // --- Rating / Ranking State ---
+    const [rankingCriteria, setRankingCriteria] = useState<'TIME' | 'VISITS' | 'SPEND'>('TIME'); // Default Time
+    const [ranks, setRanks] = useState<RankLevel[]>([
+        { id: '1', name: 'BRONZE', min: 0, max: 32, color: '#f97316', className: 'bg-orange-50 border-orange-200', benefits: 'სტანდარტული პირობები' },
+        { id: '2', name: 'SILVER', min: 32, max: 50, color: '#94a3b8', className: 'bg-slate-50 border-slate-200', benefits: '-5% ბარში' },
+        { id: '3', name: 'GOLD', min: 50, max: 90, color: '#facc15', className: 'bg-yellow-50 border-yellow-200', benefits: '-10% ბარში\nუფასო პირსახოცი' },
+        { id: '4', name: 'PLATINUM', min: 90, max: 9999, color: '#22d3ee', className: 'bg-cyan-50 border-cyan-200', benefits: '-20% ყველაფერზე\nპერსონალური კარადა' }
+    ]);
+
+    // Persist Ranking Config
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('artron_ranking_config', JSON.stringify({ criteria: rankingCriteria, ranks }));
+        }
+    }, [rankingCriteria, ranks]);
+
+    const [editingRankId, setEditingRankId] = useState<string | null>(null);
+    const [deletingRank, setDeletingRank] = useState<RankLevel | null>(null);
+
+    // --- Safe Delete / Migration Logic ---
+    const [archivingMembers, setArchivingMembers] = useState<{ rank: RankLevel, members: any[] } | null>(null);
+
+    // Todo: Replace with real user data from backend
+    const [mockMembers, setMockMembers] = useState([
+        { id: 101, name: 'გიორგი ბერიძე', rankId: '1', photo: null },
+        { id: 102, name: 'ნინო დათიაშვილი', rankId: '2', photo: null },
+        { id: 103, name: 'ირაკლი გოგუაძე', rankId: '1', photo: null },
+        { id: 104, name: 'მარიამ კვარაცხელია', rankId: '3', photo: null },
+    ]);
+
+    const [reservedMembers, setReservedMembers] = useState<any[]>([]); // Members whose rank was deleted
+
+    const updateRank = (id: string, field: keyof RankLevel, value: any) => {
+        setRanks(ranks.map(r => r.id === id ? { ...r, [field]: value } : r));
+    };
+
+    const addRank = () => {
+        const lastRank = ranks[ranks.length - 1];
+        const newMax = lastRank ? lastRank.max + 50 : 50;
+        const newMin = lastRank ? lastRank.max : 0;
+        const newId = Date.now().toString();
+
+        setRanks([...ranks, {
+            id: newId,
+            name: 'NEW RANK',
+            min: newMin,
+            max: newMax,
+            color: '#e2e8f0',
+            className: 'bg-gray-50 border-gray-200',
+            benefits: ''
+        }]);
+        setEditingRankId(newId); // Auto-enter edit mode
+    };
+
+    const confirmDeleteRank = (rank: RankLevel) => {
+        // Check if players have this rank
+        const activeMembers = mockMembers.filter(m => m.rankId === rank.id);
+
+        if (activeMembers.length > 0) {
+            // Trigger Archive Flow
+            setArchivingMembers({ rank, members: activeMembers });
+        } else {
+            // Normal Delete Flow
+            setDeletingRank(rank);
+        }
+    };
+
+    const executeDeleteRank = () => {
+        if (deletingRank) {
+            setRanks(ranks.filter(r => r.id !== deletingRank.id));
+            setDeletingRank(null);
+        }
+    };
+
+    const executeArchiveAndDelete = () => {
+        if (archivingMembers) {
+            // 1. Reserve Members (Add to Reserved List with metadata about their lost rank)
+            const archived = archivingMembers.members.map(m => ({
+                ...m,
+                originalRank: archivingMembers.rank.name,
+                archivedAt: new Date().toISOString()
+            }));
+
+            setReservedMembers(prev => [...prev, ...archived]);
+
+            // 2. Remove from Mock Active Members (Simulating backend update)
+            setMockMembers(prev => prev.filter(m => m.rankId !== archivingMembers.rank.id));
+
+            // 3. Delete the Rank
+            setRanks(ranks.filter(r => r.id !== archivingMembers.rank.id));
+
+            // 4. Cleanup
+            setArchivingMembers(null);
+        }
+    };
+
+    // --- Reassignment Logic ---
+    const [selectedReservedMemberIds, setSelectedReservedMemberIds] = useState<string[]>([]);
+    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+
+    const toggleSelectReservedMember = (id: string) => {
+        setSelectedReservedMemberIds(prev =>
+            prev.includes(id) ? prev.filter(mId => mId !== id) : [...prev, id]
+        );
+    };
+
+    const toggleSelectAllReserved = () => {
+        if (selectedReservedMemberIds.length === reservedMembers.length) {
+            setSelectedReservedMemberIds([]);
+        } else {
+            setSelectedReservedMemberIds(reservedMembers.map(m => m.id.toString()));
+        }
+    };
+
+    const executeReassignment = (targetRankId: string) => {
+        if (selectedReservedMemberIds.length === 0) return;
+
+        // In a real app, this would be an API call to update members
+        console.log(`Reassigning members ${selectedReservedMemberIds.join(', ')} to rank ${targetRankId}`);
+
+        // Remove from reserved list
+        setReservedMembers(prev => prev.filter(m => !selectedReservedMemberIds.includes(m.id.toString())));
+
+        // Add back to mock active members with new rank
+        const reassigningMembers = reservedMembers.filter(m => selectedReservedMemberIds.includes(m.id.toString()));
+        const updatedMembers = reassigningMembers.map(m => ({
+            id: m.id,
+            name: m.name,
+            rankId: targetRankId,
+            photo: m.photo
+        }));
+
+        setMockMembers(prev => [...prev, ...updatedMembers]);
+
+        // Cleanup
+        setSelectedReservedMemberIds([]);
+        setIsReassignModalOpen(false);
+    };
+
     // --- Gym Modeling Handlers ---
+    const toggleSauna = () => {
+        const newState = !hasSauna;
+        setHasSauna(newState);
+
+        if (newState) {
+            if (!rooms.some(r => r.name === 'საუნა')) {
+                addRoom('other', 'საუნა');
+            }
+        } else {
+            const room = rooms.find(r => r.name === 'საუნა');
+            if (room) deleteRoom(room.id);
+        }
+    };
+
+    const toggleBar = () => {
+        const newState = !hasBar;
+        setHasBar(newState);
+
+        if (newState) {
+            if (!rooms.some(r => r.name === 'ბარი / კაფეტერია')) {
+                addRoom('other', 'ბარი / კაფეტერია');
+            }
+        } else {
+            const room = rooms.find(r => r.name === 'ბარი / კაფეტერია');
+            if (room) deleteRoom(room.id);
+        }
+    };
+
+    const togglePwd = () => {
+        setHasPwd(!hasPwd);
+        if (hasPwd) {
+            // If turning OFF, maybe disable sub-options?
+            // Optional: setHasRamp(false); setHasPwdBathroom(false);
+            // I'll leave them as is or reset them. Let's reset for cleaner state.
+            setHasRamp(false);
+            if (hasPwdBathroom) togglePwdBathroom(); // This will remove the room
+        }
+    };
+
+    const toggleRamp = () => {
+        setHasRamp(!hasRamp);
+    };
+
+    const togglePwdBathroom = () => {
+        const newState = !hasPwdBathroom;
+        setHasPwdBathroom(newState);
+
+        if (newState) {
+            if (!rooms.some(r => r.name === 'შშმპ სველი წერტილი')) {
+                addRoom('other', 'შშმპ სველი წერტილი');
+            }
+        } else {
+            const room = rooms.find(r => r.name === 'შშმპ სველი წერტილი');
+            if (room) deleteRoom(room.id);
+        }
+    };
+
+
+
+
+
+    // Generic helper to sync rooms with counters
+    const synchronizeRooms = (count: number, roomName: string) => {
+        const currentRooms = rooms.filter(r => r.name === roomName);
+        const currentCount = currentRooms.length;
+        let updatedRooms = [...rooms];
+
+        if (count > currentCount) {
+            const toAdd = count - currentCount;
+            for (let i = 0; i < toAdd; i++) {
+                updatedRooms.push({
+                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+                    name: roomName,
+                    area: 0,
+                    type: 'other'
+                });
+            }
+        } else if (count < currentCount) {
+            const toRemove = currentCount - count;
+            const roomsToRemove = currentRooms.slice(-toRemove);
+            const idsToRemove = new Set(roomsToRemove.map(r => r.id));
+            updatedRooms = updatedRooms.filter(r => !idsToRemove.has(r.id));
+        }
+
+        setRooms(updatedRooms);
+        if (activeContext.type === 'BRANCH') {
+            setCompany(prev => ({
+                ...prev,
+                branches: prev.branches.map(b => b.id === activeContext.id ? { ...b, rooms: updatedRooms } : b)
+            }));
+        }
+    };
+
+    const updateMaleLockerRooms = (newCount: number) => {
+        setMaleLockerRooms(newCount);
+        synchronizeRooms(newCount, 'გასახდელი (კაცი)');
+    };
+
+    const updateFemaleLockerRooms = (newCount: number) => {
+        setFemaleLockerRooms(newCount);
+        synchronizeRooms(newCount, 'გასახდელი (ქალი)');
+    };
+
+    const updateMinorMaleLockerRooms = (newCount: number) => {
+        setMinorMaleLockerRooms(newCount);
+        synchronizeRooms(newCount, 'გასახდელი (ბიჭი)');
+    };
+
+    const updateMinorFemaleLockerRooms = (newCount: number) => {
+        setMinorFemaleLockerRooms(newCount);
+        synchronizeRooms(newCount, 'გასახდელი (გოგო)');
+    };
+
+    const updateBathrooms = (newCount: number) => {
+        setBathrooms(newCount);
+        synchronizeRooms(newCount, 'საშხაპეები / WC');
+    };
     const handleBlueprintUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -1004,10 +1306,10 @@ export default function SettingsPage() {
         }
     };
 
-    const addRoom = (type: 'group' | 'other') => {
+    const addRoom = (type: 'group' | 'other', customName?: string) => {
         const newRoom: Room = {
             id: Date.now().toString(),
-            name: type === 'group' ? 'ახალი ჯგუფური დარბაზი' : 'ახალი ოთახი',
+            name: customName || (type === 'group' ? 'ახალი ჯგუფური დარბაზი' : 'ახალი ოთახი'),
             area: 0,
             type
         };
@@ -1780,7 +2082,7 @@ export default function SettingsPage() {
             ? findDepartment(editingPosition.depId, departments)?.node.positions.find(p => p.id === editingPosition.posId)
             : null;
 
-        const moduleKeys: (keyof Permissions)[] = ['dashboard', 'users', 'activities', 'corporate', 'employees', 'market', 'warehouse', 'accounting', 'statistics', 'settings'];
+        const moduleKeys: (keyof Permissions)[] = ['dashboard', 'users', 'activities', 'corporate', 'employees', 'market', 'warehouse', 'accounting', 'statistics', 'settings', 'old_db'];
 
         return (
             <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
@@ -1966,7 +2268,8 @@ export default function SettingsPage() {
                                                     accounting: 'ბუღალტერია',
                                                     statistics: 'სტატისტიკა',
                                                     settings: 'პარამეტრები',
-                                                    warehouse: 'საწყობი'
+                                                    warehouse: 'საწყობი',
+                                                    old_db: 'ძველი ბაზის გამოყენება'
                                                 };
                                                 return (
                                                     <div key={mod} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
@@ -2083,9 +2386,10 @@ export default function SettingsPage() {
                 price: 0,
                 subModules: [
                     { id: 'registration_new', label: 'ახალი მომხმარებლის რეგისტრაცია', price: 50 },
-                    { id: 'reservation', label: 'ადგილის დაჯავშნა', price: 30 },
                 ]
             },
+            { id: 'reservation', label: 'ადგილის დაჯავშნა', price: 30 },
+            { id: 'schedule', label: 'განრიგის მართვა', price: 40 },
             {
                 id: 'library',
                 label: 'აქტივობების ბიბლიოთეკა',
@@ -2097,8 +2401,17 @@ export default function SettingsPage() {
                     { id: 'activity_calendar', label: 'კალენდარული აქტივობები', price: 40 },
                 ]
             },
-            { id: 'communication', label: 'კომუნიკაცია მომხმარებელთან', price: 60 },
-            { id: 'corporate', label: 'კორპორატიული სერვისი', price: 80 },
+            {
+                id: 'marketing',
+                label: 'მარკეტინგი',
+                price: 0,
+                subModules: [
+                    { id: 'rating', label: 'რეიტინგი და რეფერალები', price: 40 },
+                    { id: 'communication', label: 'კომუნიკაცია მომხმარებელთან', price: 60 },
+                    { id: 'promotions', label: 'აქციების მართვა', price: 50 },
+                    { id: 'corporate', label: 'კორპორატიული/პარტნიორები', price: 80 },
+                ]
+            },
             { id: 'market', label: 'ქარვასლა (მარკეტი/ბარი)', price: 60 },
             { id: 'warehouse', label: 'საწყობის მართვა', price: 40 },
             { id: 'accounting', label: 'ბუღალტერია (ინვოისები/ხარჯები)', price: 70 },
@@ -2126,7 +2439,12 @@ export default function SettingsPage() {
             return mods.map((mod) => (
                 <div key={mod.id} className={`${level > 0 ? 'ml-8 mt-2' : 'mt-4'}`}>
                     <div
-                        className={`flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-colors cursor-pointer ${mod.subModules ? 'bg-slate-100/50' : ''}`}
+                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer 
+                            ${level > 0
+                                ? 'bg-indigo-50/50 border-indigo-100 hover:border-indigo-300'
+                                : 'bg-slate-50 border-slate-100 hover:border-indigo-200'
+                            }
+                            ${mod.subModules ? 'bg-slate-100/50' : ''}`}
                         onClick={() => {
                             if (!mod.subModules) {
                                 setSelectedModules({ ...selectedModules, [mod.id]: !selectedModules[mod.id] });
@@ -2140,7 +2458,10 @@ export default function SettingsPage() {
                                 </div>
                             )}
                             {mod.subModules && <div className="w-1 h-6 bg-indigo-500 rounded-full"></div>}
-                            <span className={`text-sm font-bold ${selectedModules[mod.id] || mod.subModules ? 'text-slate-800' : 'text-slate-500'}`}>{mod.label}</span>
+                            <span className={`text-sm font-bold ${selectedModules[mod.id] || mod.subModules
+                                ? (level > 0 ? 'text-indigo-700' : 'text-slate-800')
+                                : 'text-slate-500'
+                                }`}>{mod.label}</span>
                         </div>
                         {mod.price > 0 && <span className="text-xs font-black text-slate-400">{mod.price} ₾/თვე</span>}
                     </div>
@@ -2247,11 +2568,47 @@ export default function SettingsPage() {
                                         <span>ჯამი:</span>
                                         <span>{totalCost} ₾</span>
                                     </div>
-                                    <p className="text-[10px] text-center opacity-40 uppercase tracking-widest mt-2">ყოველთვიური გადასახადი</p>
+                                    <p className="text-[10px] text-center opacity-40 uppercase tracking-widest mt-2 mb-6">ყოველთვიური გადასახადი</p>
+
+                                    {/* Payment Interval Selector */}
+                                    <div className="bg-white/5 rounded-2xl p-1 mb-6 flex">
+                                        {[1, 3, 6, 12].map((interval) => {
+                                            const discount = interval === 3 ? 10 : interval === 6 ? 15 : interval === 12 ? 20 : 0;
+                                            return (
+                                                <button
+                                                    key={interval}
+                                                    onClick={() => setPaymentInterval(interval)}
+                                                    className={`flex-1 py-1.5 rounded-xl text-[10px] font-black transition-all ${paymentInterval === interval ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                                >
+                                                    {interval} თვე
+                                                    {discount > 0 && <span className="block text-[8px] opacity-70">-{discount}%</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Final Calculation */}
+                                    {paymentInterval > 1 && (
+                                        <div className="space-y-2 mb-6 bg-white/5 p-4 rounded-xl border border-white/5">
+                                            <div className="flex justify-between text-xs text-slate-400">
+                                                <span>ღირებულება ({paymentInterval} თვე):</span>
+                                                <span>{totalCost * paymentInterval} ₾</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs text-green-400 font-bold">
+                                                <span>ფასდაკლება ({paymentInterval === 3 ? '10' : paymentInterval === 6 ? '15' : '20'}%):</span>
+                                                <span>-{Math.round(totalCost * paymentInterval * (paymentInterval === 3 ? 0.1 : paymentInterval === 6 ? 0.15 : 0.2))} ₾</span>
+                                            </div>
+                                            <div className="w-full h-px bg-white/10 my-2"></div>
+                                            <div className="flex justify-between text-lg font-black text-white">
+                                                <span>სულ გადასახდელი:</span>
+                                                <span>{Math.round(totalCost * paymentInterval * (1 - (paymentInterval === 3 ? 0.1 : paymentInterval === 6 ? 0.15 : 0.2)))} ₾</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <button
-                                    onClick={() => completeStep(6)}
+                                    onClick={() => setIsActivationModalOpen(true)}
                                     className="w-full py-4 bg-lime-400 text-slate-900 font-black rounded-2xl hover:bg-lime-300 transition-colors shadow-lg shadow-lime-400/20 flex items-center justify-center"
                                 >
                                     <Check size={18} className="mr-2" />
@@ -2262,6 +2619,103 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Activation Confirmation Modal */}
+                {isActivationModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-[3rem] shadow-2xl max-w-4xl w-full relative animate-fadeIn max-h-[85vh] flex flex-col overflow-hidden">
+                            <div className="p-8 pb-0">
+                                <button
+                                    onClick={() => setIsActivationModalOpen(false)}
+                                    className="absolute top-6 right-6 p-2 bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors z-10"
+                                >
+                                    <X size={20} />
+                                </button>
+
+                                <div className="text-center mb-6">
+                                    <div className="w-16 h-16 bg-lime-100 text-lime-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <ShieldCheck size={32} />
+                                    </div>
+                                    <h3 className="text-xl font-black text-slate-900 mb-2">დაადასტურეთ შეკვეთა</h3>
+                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">გთხოვთ გადაამოწმოთ დეტალები</p>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-hidden p-8 pt-0 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Left Column: Features List */}
+                                <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 overflow-y-auto custom-scrollbar">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 sticky top-0 bg-slate-50 z-10 pb-2 border-b border-slate-100">
+                                        არჩეული ფუნქციონალი
+                                    </p>
+                                    <ul className="space-y-3">
+                                        {modules.map((m) => {
+                                            const isActive = selectedModules[m.id];
+                                            const activeSubModules = m.subModules ? m.subModules.filter((sm: any) => selectedModules[sm.id]) : [];
+
+                                            if (!isActive && activeSubModules.length === 0) return null;
+
+                                            return (
+                                                <li key={m.id} className="text-sm font-bold text-slate-700 flex items-start">
+                                                    <CheckCircle2 size={16} className="text-lime-500 mr-3 shrink-0 mt-0.5" />
+                                                    <div className="flex-1">
+                                                        <span className="leading-tight block">{m.label}</span>
+                                                        {activeSubModules.length > 0 && (
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {activeSubModules.map((sm: any) => (
+                                                                    <span key={sm.id} className="text-[10px] bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-500 font-medium">
+                                                                        {sm.label}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+
+                                {/* Right Column: Summary & Actions */}
+                                <div className="flex flex-col space-y-6">
+                                    <div className="bg-slate-900 text-white p-8 rounded-3xl relative overflow-hidden flex-1 flex flex-col justify-center">
+                                        <div className="relative z-10">
+                                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-2">ჯამური ღირებულება</p>
+                                            <div className="flex items-end space-x-2">
+                                                <span className="text-5xl font-black text-white tracking-tighter">
+                                                    {Math.round(totalCost * paymentInterval * (1 - (paymentInterval === 3 ? 0.1 : paymentInterval === 6 ? 0.15 : paymentInterval === 12 ? 0.2 : 0)))}
+                                                    <span className="text-2xl align-top ml-1">₾</span>
+                                                </span>
+                                            </div>
+                                            <span className="text-xs font-bold text-white/40 mt-2 block">
+                                                {paymentInterval} თვე / -{paymentInterval === 3 ? '10' : paymentInterval === 6 ? '15' : paymentInterval === 12 ? '20' : '0'}% ფასდაკლება
+                                            </span>
+                                        </div>
+                                        <LayoutTemplate size={120} className="absolute -bottom-6 -right-6 text-white/5 rotate-12" />
+                                    </div>
+
+                                    <div className="text-xs text-slate-500 font-medium space-y-3 bg-blue-50 p-5 rounded-3xl border border-blue-100">
+                                        <p className="flex items-center">
+                                            <Clock size={16} className="text-blue-500 mr-3 shrink-0" />
+                                            <span>გადახდისთვის გაქვთ <b>3 სამუშაო დღე</b>.</span>
+                                        </p>
+                                        <p className="flex items-center">
+                                            <Mail size={16} className="text-blue-500 mr-3 shrink-0" />
+                                            <span>ინვოისი გაგზავნილია: <b className="break-all">{company.companyEmail || 'თქვენს მეილზე'}</b></span>
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={() => { setIsActivationModalOpen(false); completeStep(6); }}
+                                        className="w-full py-5 bg-lime-400 text-slate-900 font-black rounded-2xl hover:bg-lime-300 transition-colors shadow-lg shadow-lime-400/20 flex items-center justify-center arrow-animation text-lg"
+                                    >
+                                        <span>შეკვეთის დადასტურება</span>
+                                        <ArrowRight size={20} className="ml-2" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -3096,112 +3550,187 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                    <div className="lg:col-span-8 space-y-6">
+                    <div className="lg:col-span-12 space-y-6">
                         {/* General Parameters */}
-                        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm">
-                            <h3 className="font-black text-slate-800 flex items-center mb-8">
-                                <Maximize size={20} className="mr-2 text-orange-500" />
+                        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                            <h3 className="font-black text-slate-800 flex items-center text-sm mb-4">
+                                <Maximize size={16} className="mr-2 text-orange-500" />
                                 ძირითადი პარამეტრები
                             </h3>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block text-center">საერთო ფართი</label>
-                                    <div className="bg-slate-50 p-4 rounded-[2rem] text-center border border-slate-100">
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block text-center">საერთო ფართი</label>
+                                    <div className="bg-slate-50 p-2 rounded-2xl text-center border border-slate-100">
                                         <input
                                             type="number"
                                             value={totalArea}
                                             onChange={(e) => setTotalArea(parseFloat(e.target.value))}
-                                            className="w-full bg-transparent text-center text-2xl font-black text-slate-800 outline-none"
+                                            className="w-full bg-transparent text-center text-lg font-black text-slate-800 outline-none"
                                         />
-                                        <span className="text-xs font-bold text-slate-400">კვ.მ</span>
+                                        <span className="text-[10px] font-bold text-slate-400">კვ.მ</span>
                                     </div>
                                 </div>
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider block text-center">ჭერის სიმაღლე</label>
-                                    <div className="bg-slate-50 p-4 rounded-[2rem] text-center border border-slate-100">
+                                <div className="space-y-2">
+                                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block text-center">ჭერის სიმაღლე</label>
+                                    <div className="bg-slate-50 p-2 rounded-2xl text-center border border-slate-100">
                                         <input
                                             type="number"
                                             value={ceilingHeight}
                                             onChange={(e) => setCeilingHeight(parseFloat(e.target.value))}
-                                            className="w-full bg-transparent text-center text-2xl font-black text-slate-800 outline-none"
+                                            className="w-full bg-transparent text-center text-lg font-black text-slate-800 outline-none"
                                         />
-                                        <span className="text-xs font-bold text-slate-400">მეტრი</span>
+                                        <span className="text-[10px] font-bold text-slate-400">მეტრი</span>
                                     </div>
                                 </div>
-                                <div className="col-span-2 bg-slate-900 rounded-[2.5rem] p-6 text-white relative overflow-hidden flex flex-col justify-center items-center">
-                                    <p className="text-[10px] font-black text-orange-400 uppercase tracking-wider mb-2 relative z-10">სივრცის ათვისება</p>
+                                <div className="col-span-2 bg-slate-900 rounded-3xl p-4 text-white relative overflow-hidden flex flex-col justify-center items-center">
+                                    <p className="text-[9px] font-black text-orange-400 uppercase tracking-wider mb-1 relative z-10">სივრცის ათვისება</p>
                                     <div className="flex items-end space-x-2 relative z-10">
-                                        <span className={`text-4xl font-black ${utilizationPercent > 100 ? 'text-red-400' : ''}`}>{utilizationPercent}%</span>
+                                        <span className={`text-2xl font-black ${utilizationPercent > 100 ? 'text-red-400' : ''}`}>{utilizationPercent}%</span>
                                     </div>
-                                    <div className="w-full h-2 bg-white/10 rounded-full mt-3 relative z-10 overflow-hidden">
+                                    <div className="w-full h-1.5 bg-white/10 rounded-full mt-2 relative z-10 overflow-hidden">
                                         <div className={`h-full transition-all duration-500 ${utilizationPercent > 100 ? 'bg-red-500' : 'bg-lime-400'}`} style={{ width: `${Math.min(utilizationPercent, 100)}%` }}></div>
                                     </div>
-                                    <Layout size={80} className="absolute -right-4 -bottom-4 text-white/5 rotate-12" />
+                                    <Layout size={60} className="absolute -right-4 -bottom-4 text-white/5 rotate-12" />
                                 </div>
                             </div>
                         </div>
 
                         {/* Zones */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-6">
                                 <h4 className="font-black text-slate-800 flex items-center text-sm uppercase">
                                     <ShowerHead size={18} className="mr-2 text-cyan-500" />
                                     სველი წერტილები
                                 </h4>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
-                                        <span className="text-xs font-bold text-slate-600">გასახდელი (კაცი)</span>
-                                        <div className="flex items-center space-x-3">
-                                            <button onClick={() => setMaleLockerRooms(Math.max(0, maleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">-</button>
-                                            <span className="font-black text-lg w-4 text-center">{maleLockerRooms}</span>
-                                            <button onClick={() => setMaleLockerRooms(maleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">+</button>
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-wide">საშხაპეები / WC</span>
+                                    <div className="flex items-center space-x-2">
+                                        <button onClick={() => updateBathrooms(Math.max(0, bathrooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">-</button>
+                                        <span className="font-black text-sm w-4 text-center">{bathrooms}</span>
+                                        <button onClick={() => updateBathrooms(bathrooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">+</button>
+                                    </div>
+                                </div>
+                                <div className="h-px bg-slate-100"></div>
+
+                                {/* Male Section */}
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">გასახდელი (კაცი)</span>
+                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">კარადები: {maleLockersCount}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <input type="number" placeholder="0" value={maleLockersCount || ''} onChange={e => setMaleLockersCount(parseInt(e.target.value) || 0)} className="w-10 text-center bg-white py-1 rounded-lg text-xs font-black outline-none shadow-sm" />
+                                        <div className="flex items-center space-x-2">
+                                            <button onClick={() => updateMaleLockerRooms(Math.max(0, maleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">-</button>
+                                            <span className="font-black text-sm w-4 text-center">{maleLockerRooms}</span>
+                                            <button onClick={() => updateMaleLockerRooms(maleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">+</button>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
-                                        <span className="text-xs font-bold text-slate-600">კარადა (კაცი)</span>
-                                        <input type="number" value={maleLockersCount} onChange={e => setMaleLockersCount(parseInt(e.target.value))} className="w-16 text-center bg-white py-1 rounded-lg text-sm font-black outline-none" />
+                                </div>
+
+                                {/* Female Section */}
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">გასახდელი (ქალი)</span>
+                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">კარადები: {femaleLockersCount}</span>
                                     </div>
-                                    <div className="h-px bg-slate-100"></div>
-                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
-                                        <span className="text-xs font-bold text-slate-600">გასახდელი (ქალი)</span>
-                                        <div className="flex items-center space-x-3">
-                                            <button onClick={() => setFemaleLockerRooms(Math.max(0, femaleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">-</button>
-                                            <span className="font-black text-lg w-4 text-center">{femaleLockerRooms}</span>
-                                            <button onClick={() => setFemaleLockerRooms(femaleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">+</button>
+                                    <div className="flex items-center space-x-3">
+                                        <input type="number" placeholder="0" value={femaleLockersCount || ''} onChange={e => setFemaleLockersCount(parseInt(e.target.value) || 0)} className="w-10 text-center bg-white py-1 rounded-lg text-xs font-black outline-none shadow-sm" />
+                                        <div className="flex items-center space-x-2">
+                                            <button onClick={() => updateFemaleLockerRooms(Math.max(0, femaleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">-</button>
+                                            <span className="font-black text-sm w-4 text-center">{femaleLockerRooms}</span>
+                                            <button onClick={() => updateFemaleLockerRooms(femaleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">+</button>
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center p-4 bg-slate-50 rounded-2xl">
-                                        <span className="text-xs font-bold text-slate-600">კარადა (ქალი)</span>
-                                        <input type="number" value={femaleLockersCount} onChange={e => setFemaleLockersCount(parseInt(e.target.value))} className="w-16 text-center bg-white py-1 rounded-lg text-sm font-black outline-none" />
+                                </div>
+
+                                <div className="h-px bg-slate-100"></div>
+
+                                {/* Minor Male Section */}
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">გასახდელი (ბიჭი)</span>
+                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">კარადები: {minorMaleLockersCount}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <input type="number" placeholder="0" value={minorMaleLockersCount || ''} onChange={e => setMinorMaleLockersCount(parseInt(e.target.value) || 0)} className="w-10 text-center bg-white py-1 rounded-lg text-xs font-black outline-none shadow-sm" />
+                                        <div className="flex items-center space-x-2">
+                                            <button onClick={() => updateMinorMaleLockerRooms(Math.max(0, minorMaleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">-</button>
+                                            <span className="font-black text-sm w-4 text-center">{minorMaleLockerRooms}</span>
+                                            <button onClick={() => updateMinorMaleLockerRooms(minorMaleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">+</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Minor Female Section */}
+                                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-800 uppercase tracking-wide">გასახდელი (გოგო)</span>
+                                        <span className="text-[9px] font-bold text-slate-400 mt-0.5">კარადები: {minorFemaleLockersCount}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <input type="number" placeholder="0" value={minorFemaleLockersCount || ''} onChange={e => setMinorFemaleLockersCount(parseInt(e.target.value) || 0)} className="w-10 text-center bg-white py-1 rounded-lg text-xs font-black outline-none shadow-sm" />
+                                        <div className="flex items-center space-x-2">
+                                            <button onClick={() => updateMinorFemaleLockerRooms(Math.max(0, minorFemaleLockerRooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">-</button>
+                                            <span className="font-black text-sm w-4 text-center">{minorFemaleLockerRooms}</span>
+                                            <button onClick={() => updateMinorFemaleLockerRooms(minorFemaleLockerRooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800 text-xs">+</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
+
                             <div className="space-y-6">
-                                <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm space-y-6">
-                                    <h4 className="font-black text-slate-800 flex items-center text-sm uppercase">
-                                        <Coffee size={18} className="mr-2 text-amber-600" />
+                                <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+                                    <h4 className="font-black text-slate-800 flex items-center text-xs uppercase">
+                                        <Coffee size={16} className="mr-2 text-amber-600" />
                                         კომფორტის ზონები
                                     </h4>
-                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
-                                        <span className="text-xs font-bold text-slate-600">საშხაპეები / WC</span>
-                                        <div className="flex items-center space-x-3">
-                                            <button onClick={() => setBathrooms(Math.max(0, bathrooms - 1))} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">-</button>
-                                            <span className="font-black text-lg w-4 text-center">{bathrooms}</span>
-                                            <button onClick={() => setBathrooms(bathrooms + 1)} className="w-6 h-6 rounded-lg bg-white shadow flex items-center justify-center text-slate-400 hover:text-slate-800">+</button>
+
+
+                                    <div className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${hasSauna ? 'bg-orange-100 ring-1 ring-orange-400' : 'bg-slate-50'}`} onClick={toggleSauna}>
+                                        <span className={`text-[10px] font-bold ${hasSauna ? 'text-orange-700' : 'text-slate-600'}`}>საუნა</span>
+                                        <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${hasSauna ? 'bg-orange-500' : 'bg-slate-200'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${hasSauna ? 'translate-x-3' : ''}`}></div>
                                         </div>
                                     </div>
-                                    <div className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all ${hasBar ? 'bg-amber-100 ring-2 ring-amber-400' : 'bg-slate-50'}`} onClick={() => setHasBar(!hasBar)}>
-                                        <span className={`text-xs font-bold ${hasBar ? 'text-amber-700' : 'text-slate-600'}`}>ცალკე ბარი / კაფეტერია</span>
-                                        <div className={`w-10 h-6 rounded-full p-1 transition-colors ${hasBar ? 'bg-amber-500' : 'bg-slate-200'}`}>
-                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${hasBar ? 'translate-x-4' : ''}`}></div>
+
+                                    <div className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${hasBar ? 'bg-amber-100 ring-1 ring-amber-400' : 'bg-slate-50'}`} onClick={toggleBar}>
+                                        <span className={`text-[10px] font-bold ${hasBar ? 'text-amber-700' : 'text-slate-600'}`}>ცალკე ბარი / კაფეტერია</span>
+                                        <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${hasBar ? 'bg-amber-500' : 'bg-slate-200'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${hasBar ? 'translate-x-3' : ''}`}></div>
                                         </div>
                                     </div>
+
+                                    <div className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${hasPwd ? 'bg-purple-100 ring-1 ring-purple-400' : 'bg-slate-50'}`} onClick={togglePwd}>
+                                        <span className={`text-[10px] font-bold ${hasPwd ? 'text-purple-700' : 'text-slate-600'}`}>შშმპ (ადაპტირებული)</span>
+                                        <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${hasPwd ? 'bg-purple-500' : 'bg-slate-200'}`}>
+                                            <div className={`w-4 h-4 bg-white rounded-full transition-transform ${hasPwd ? 'translate-x-3' : ''}`}></div>
+                                        </div>
+                                    </div>
+
+                                    {hasPwd && (
+                                        <div className="pl-4 space-y-3 border-l-2 border-purple-100 ml-4">
+                                            <div className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all ${hasRamp ? 'bg-purple-50 ring-1 ring-purple-200' : 'bg-slate-50'}`} onClick={toggleRamp}>
+                                                <span className={`text-[9px] font-bold ${hasRamp ? 'text-purple-600' : 'text-slate-500'}`}>პანდუსი</span>
+                                                <div className={`w-6 h-4 rounded-full p-0.5 transition-colors ${hasRamp ? 'bg-purple-400' : 'bg-slate-200'}`}>
+                                                    <div className={`w-3 h-3 bg-white rounded-full transition-transform ${hasRamp ? 'translate-x-2' : ''}`}></div>
+                                                </div>
+                                            </div>
+
+                                            <div className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-all ${hasPwdBathroom ? 'bg-purple-50 ring-1 ring-purple-200' : 'bg-slate-50'}`} onClick={togglePwdBathroom}>
+                                                <span className={`text-[9px] font-bold ${hasPwdBathroom ? 'text-purple-600' : 'text-slate-500'}`}>სველი წერტილი (შშმპ)</span>
+                                                <div className={`w-6 h-4 rounded-full p-0.5 transition-colors ${hasPwdBathroom ? 'bg-purple-400' : 'bg-slate-200'}`}>
+                                                    <div className={`w-3 h-3 bg-white rounded-full transition-transform ${hasPwdBathroom ? 'translate-x-2' : ''}`}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-xl flex items-center justify-between group cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => fileInputRef.current?.click()}>
+                                <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white shadow-xl flex items-center justify-between group cursor-pointer hover:bg-slate-800 transition-colors" onClick={() => fileInputRef.current?.click()}>
                                     <div>
-                                        <h4 className="font-black text-sm mb-1 flex items-center"><Upload size={16} className="mr-2" /> ატვირთე ნახაზი</h4>
+                                        <h4 className="font-black text-xs mb-1 flex items-center"><Upload size={14} className="mr-2" /> ატვირთე ნახაზი</h4>
                                         <p className="text-[10px] text-slate-400 uppercase font-bold">{blueprint ? blueprint.name : "აირჩიეთ ფაილი (PDF, IMG)"}</p>
                                     </div>
                                     <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
@@ -3213,54 +3742,649 @@ export default function SettingsPage() {
                                     </div>
                                     <input type="file" ref={fileInputRef} className="hidden" onChange={handleBlueprintUpload} />
                                 </div>
+
+                            </div>
+
+                            {/* Spaces List - Direct Child of Grid */}
+                            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col h-full">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h4 className="font-black text-slate-800 flex items-center text-xs uppercase">
+                                        <DoorOpen size={16} className="mr-2 text-indigo-500" />
+                                        სივრცეები
+                                    </h4>
+                                    <div className="flex space-x-2">
+                                        <button onClick={() => addRoom('group')} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"><UsersRound size={14} /></button>
+                                        <button onClick={() => addRoom('other')} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors"><Plus size={14} /></button>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
+                                    {rooms.map((room) => (
+                                        <div key={room.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100 group hover:border-indigo-200 transition-colors">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <input
+                                                    value={room.name}
+                                                    onChange={e => updateRoom(room.id, 'name', e.target.value)}
+                                                    className="bg-transparent font-bold text-xs text-slate-800 w-full outline-none focus:text-indigo-600"
+                                                />
+                                                <button onClick={() => deleteRoom(room.id)} className="text-slate-300 hover:text-red-400 transition-colors"><X size={12} /></button>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                <div className="flex-1 bg-white rounded-lg p-1.5 flex items-center justify-between border border-slate-100">
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">კვ.მ</span>
+                                                    <input
+                                                        type="number"
+                                                        value={room.area}
+                                                        onChange={e => updateRoom(room.id, 'area', parseFloat(e.target.value))}
+                                                        className="w-10 text-right text-[10px] font-black outline-none"
+                                                    />
+                                                </div>
+                                                <div className={`p-1.5 rounded-lg ${room.type === 'group' ? 'bg-indigo-100 text-indigo-500' : 'bg-slate-200 text-slate-500'}`}>
+                                                    {room.type === 'group' ? <UsersRound size={12} /> : <Layout size={12} />}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Rooms List */}
-                    <div className="lg:col-span-4 space-y-6">
-                        <div className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm h-full flex flex-col">
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="font-black text-slate-800 flex items-center text-sm uppercase">
-                                    <DoorOpen size={18} className="mr-2 text-indigo-500" />
-                                    სივრცეები
-                                </h4>
-                                <div className="flex space-x-2">
-                                    <button onClick={() => addRoom('group')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-indigo-500 transition-colors"><UsersRound size={16} /></button>
-                                    <button onClick={() => addRoom('other')} className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors"><Plus size={16} /></button>
+            </div>
+        );
+    }
+
+    // --- RENDER RATING SYSTEM VIEW ---
+    if (activeSubView === 'RATING') {
+        return (
+            <div className="max-w-5xl mx-auto space-y-6 animate-fadeIn pb-24">
+                {/* Header */}
+                {/* Header */}
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white px-6 py-4 rounded-[2rem] border border-slate-100 shadow-sm gap-4">
+                    <div className="flex items-center">
+                        <button onClick={() => setActiveSubView('MARKETING_HUB')} className="mr-4 p-2 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-800 transition-colors group">
+                            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+                        </button>
+                        <div className={`p-2 rounded-xl text-white shadow-lg transition-all ${ratingSubTab === 'RATINGS' ? 'bg-yellow-400 shadow-yellow-400/20' : 'bg-indigo-500 shadow-indigo-500/20'}`}>
+                            {ratingSubTab === 'RATINGS' ? <Star size={20} /> : <Users size={20} />}
+                        </div>
+                        <h2 className="text-lg font-black text-slate-900 tracking-tight ml-3">
+                            {ratingSubTab === 'RATINGS' ? 'რეიტინგის ფორმირება' : 'რეფერალის ფორმირება'}
+                        </h2>
+                    </div>
+
+                    {/* Tab Switcher - Centered in Desktop, separate row in Mobile */}
+                    <div className="flex bg-slate-100 p-1 rounded-2xl">
+                        <button
+                            onClick={() => setRatingSubTab('RATINGS')}
+                            className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${ratingSubTab === 'RATINGS' ? 'bg-yellow-400 text-slate-900 shadow-lg shadow-yellow-400/20' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            რეიტინგი
+                        </button>
+                        <button
+                            onClick={() => setRatingSubTab('REFERRAL')}
+                            className={`px-6 py-2 rounded-xl text-xs font-bold transition-all ${ratingSubTab === 'REFERRAL' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            რეფერალი
+                        </button>
+                    </div>
+
+                    <button
+                        onClick={() => { alert('პარამეტრები შენახულია!'); setActiveSubView('MAIN'); }}
+                        className="w-full md:w-auto px-6 py-2.5 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 transition-all flex items-center justify-center"
+                    >
+                        <Save size={16} className="mr-2" />
+                        შენახვა
+                    </button>
+                </div>
+
+                <RatingCalculationConfigModal isOpen={showRatingCalculation} onClose={() => setShowRatingCalculation(false)} />
+
+                {ratingSubTab === 'RATINGS' ? (
+                    <div className="space-y-6 animate-fadeIn">
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowRatingCalculation(true)}
+                                className="flex items-center space-x-2 px-6 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl font-bold transition-all shadow-sm shadow-indigo-100 border border-indigo-200/50"
+                            >
+                                <Calculator size={18} />
+                                <span>რეიტინგის სისტემის კალკულაცია</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                            {/* Compact Criteria Selector */}
+                            <div className="bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm">
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setRankingCriteria('TIME')}
+                                        className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-xl border transition-all ${rankingCriteria === 'TIME' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 font-medium'}`}
+                                    >
+                                        <Clock size={16} />
+                                        <span className="text-sm">დროის მიხედვით</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setRankingCriteria('VISITS')}
+                                        className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-xl border transition-all ${rankingCriteria === 'VISITS' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 font-medium'}`}
+                                    >
+                                        <Activity size={16} />
+                                        <span className="text-sm">ვიზიტებით</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setRankingCriteria('SPEND')}
+                                        className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-xl border transition-all ${rankingCriteria === 'SPEND' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50 font-medium'}`}
+                                    >
+                                        <div className="w-4 h-4 flex items-center justify-center font-bold text-[10px] border border-current rounded">₾</div>
+                                        <span className="text-sm">თანხით</span>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="flex-1 space-y-4 overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                                {rooms.map((room) => (
-                                    <div key={room.id} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 group hover:border-indigo-200 transition-colors">
-                                        <div className="flex justify-between items-start mb-3">
-                                            <input
-                                                value={room.name}
-                                                onChange={e => updateRoom(room.id, 'name', e.target.value)}
-                                                className="bg-transparent font-bold text-sm text-slate-800 w-full outline-none focus:text-indigo-600"
-                                            />
-                                            <button onClick={() => deleteRoom(room.id)} className="text-slate-300 hover:text-red-400 transition-colors"><X size={14} /></button>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <div className="flex-1 bg-white rounded-lg p-2 flex items-center justify-between border border-slate-100">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase">კვ.მ</span>
+                            {/* Compact Ranks List */}
+                            {/* Compact Ranks Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {ranks.map((rank, index) => {
+                                    const isEditing = editingRankId === rank.id;
+                                    return (
+                                        <div key={rank.id} className={`flex flex-col items-center gap-4 p-5 rounded-[2.5rem] border transition-all bg-white relative group ${rank.className} ${isEditing ? 'ring-2 ring-indigo-500 shadow-xl scale-[1.02] z-10' : 'hover:shadow-xl hover:-translate-y-1'}`}>
+                                            {/* Icon */}
+                                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm text-white mt-1 ${index === 0 ? 'bg-orange-500 shadow-orange-500/20' : index === 1 ? 'bg-slate-400 shadow-slate-400/20' : index === 2 ? 'bg-yellow-400 shadow-yellow-400/20' : 'bg-cyan-400 shadow-cyan-400/20'}`}>
+                                                {index === 0 ? <Medal size={24} /> : <Trophy size={24} />}
+                                            </div>
+
+                                            {/* Name & Level */}
+                                            <div className="text-center w-full relative z-10">
                                                 <input
-                                                    type="number"
-                                                    value={room.area}
-                                                    onChange={e => updateRoom(room.id, 'area', parseFloat(e.target.value))}
-                                                    className="w-12 text-right text-xs font-black outline-none"
+                                                    value={rank.name}
+                                                    disabled={!isEditing}
+                                                    onChange={(e) => updateRank(rank.id, 'name', e.target.value)}
+                                                    className={`bg-transparent font-black text-lg text-slate-800 focus:outline-none w-full text-center placeholder-slate-300 mb-0.5 transition-all ${!isEditing ? 'animate-pulse cursor-default' : 'bg-white/50 rounded-lg ring-1 ring-indigo-200'}`}
+                                                    placeholder="Rank Name"
+                                                />
+                                                <div className="text-[9px] font-bold opacity-40 uppercase tracking-widest">LEVEL {index + 1}</div>
+                                            </div>
+
+                                            {/* Range Inputs */}
+                                            <div className={`w-full bg-slate-50/80 rounded-2xl p-2.5 border border-slate-100 flex items-center justify-between gap-2 transition-all ${isEditing ? 'bg-white ring-1 ring-indigo-100' : ''}`}>
+                                                <div className="text-center flex-1">
+                                                    <span className="block text-[8px] font-bold opacity-40 uppercase mb-0.5">MIN ({rankingCriteria === 'TIME' ? 'სთ' : rankingCriteria === 'VISITS' ? '#' : '₾'})</span>
+                                                    <input
+                                                        type="number"
+                                                        value={rank.min}
+                                                        disabled={!isEditing}
+                                                        onChange={(e) => updateRank(rank.id, 'min', parseInt(e.target.value) || 0)}
+                                                        className={`w-full text-center bg-transparent font-black text-slate-700 focus:outline-none text-xs ${isEditing ? 'text-indigo-600' : ''}`}
+                                                    />
+                                                </div>
+                                                <div className="h-6 w-px bg-slate-200"></div>
+                                                <div className="text-center flex-1">
+                                                    <span className="block text-[8px] font-bold opacity-40 uppercase mb-0.5">MAX</span>
+                                                    <input
+                                                        type="number"
+                                                        value={rank.max}
+                                                        disabled={!isEditing}
+                                                        onChange={(e) => updateRank(rank.id, 'max', parseInt(e.target.value) || 0)}
+                                                        className={`w-full text-center bg-transparent font-black text-slate-700 focus:outline-none text-xs ${isEditing ? 'text-indigo-600' : ''}`}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Benefits TextField */}
+                                            <div className="w-full flex-1 min-h-[60px]">
+                                                <textarea
+                                                    value={rank.benefits}
+                                                    disabled={!isEditing}
+                                                    onChange={(e) => updateRank(rank.id, 'benefits', e.target.value)}
+                                                    className={`w-full h-full border rounded-xl px-3 py-2 text-[10px] font-medium text-slate-600 outline-none transition-all placeholder-slate-300 text-center resize-none leading-relaxed ${isEditing ? 'bg-white border-indigo-200 focus:ring-2 focus:ring-indigo-500/10' : 'bg-slate-50 border-slate-100 resize-none overflow-hidden'}`}
+                                                    placeholder="პირობები და ბენეფიტები..."
                                                 />
                                             </div>
-                                            <div className={`p-2 rounded-lg ${room.type === 'group' ? 'bg-indigo-100 text-indigo-500' : 'bg-slate-200 text-slate-500'}`}>
-                                                {room.type === 'group' ? <UsersRound size={14} /> : <Layout size={14} />}
+
+                                            {/* Action Buttons */}
+                                            <div className={`absolute top-3 right-3 flex items-center space-x-1 transition-all ${!isEditing ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
+                                                {isEditing ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => setEditingRankId(null)}
+                                                            className="p-1.5 bg-indigo-500 text-white rounded-lg shadow-lg hover:bg-indigo-600 hover:scale-105 transition-all text-[10px] font-bold flex items-center px-2"
+                                                        >
+                                                            <Check size={12} className="mr-1" />
+                                                            შენახვა
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            onClick={() => setEditingRankId(rank.id)}
+                                                            className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-xl transition-all"
+                                                            title="რედაქტირება"
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => confirmDeleteRank(rank)}
+                                                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                                            title="წაშლა"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
+
+                            {/* Delete Confirmation Modal (Empty Rank) */}
+                            {deletingRank && (
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+                                    <div className="bg-white p-6 rounded-[2rem] shadow-2xl max-w-sm w-full mx-4 text-center space-y-4 animate-scaleIn">
+                                        <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-2">
+                                            <Trash2 size={32} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-black text-slate-800">ნამდვილად გსურთ წაშლა?</h3>
+                                            <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">
+                                                თქვენ აპირებთ წაშალოთ დონე <span className="font-bold text-slate-800">"{deletingRank.name}"</span>.
+                                                ეს მოქმედება შეუქცევადია.
+                                            </p>
+                                        </div>
+                                        <div className="flex gap-3 pt-2">
+                                            <button
+                                                onClick={() => setDeletingRank(null)}
+                                                className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200 transition-colors"
+                                            >
+                                                გაუქმება
+                                            </button>
+                                            <button
+                                                onClick={executeDeleteRank}
+                                                className="flex-1 py-3 bg-red-500 text-white font-bold text-xs rounded-xl hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all"
+                                            >
+                                                კი, წაშალე
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Migration / Archive Modal (Rank with Members) */}
+                            {archivingMembers && (
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                                    <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl max-w-md w-full mx-4 space-y-6 animate-scaleIn border border-orange-100">
+                                        {/* Header */}
+                                        <div className="text-center">
+                                            <div className="w-16 h-16 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                                <ShieldAlert size={32} />
+                                            </div>
+                                            <h3 className="text-xl font-black text-slate-800 tracking-tight">წაშლა შეუძლებელია!</h3>
+                                            <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">
+                                                დონე <strong>"{archivingMembers.rank.name}"</strong> მინიჭებულია <strong className="text-orange-600">{archivingMembers.members.length} მომხმარებელზე</strong>.
+                                                წაშლამდე აუცილებელია მათი მონაცემების დარეზერვება.
+                                            </p>
+                                        </div>
+
+                                        {/* Members List */}
+                                        <div className="bg-slate-50 rounded-2xl p-4 max-h-[180px] overflow-y-auto custom-scrollbar border border-slate-100">
+                                            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 sticky top-0 bg-slate-50 pb-2 border-b border-slate-100">
+                                                აქტიური მომხმარებლები
+                                            </h4>
+                                            <div className="space-y-2">
+                                                {archivingMembers.members.map((member) => (
+                                                    <div key={member.id} className="flex items-center p-2 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 font-bold text-xs mr-3">
+                                                            {member.photo ? <img src={member.photo} className="w-full h-full rounded-full object-cover" /> : <User size={14} />}
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-xs font-bold text-slate-700">{member.name}</div>
+                                                            <div className="text-[9px] text-slate-400">ID: {member.id}</div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-orange-50/50 p-3 rounded-xl border border-orange-100 text-[10px] text-orange-700 font-medium leading-relaxed flex items-start">
+                                            <Info size={14} className="mr-2 flex-shrink-0 mt-0.5" />
+                                            დარეზერვებული მომხმარებლები გადაინაცვლებენ "მიგრაციის" სიაში, საიდანაც მოგვიანებით შეძლებთ მათთვის ახალი დონის მინიჭებას.
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex gap-3 pt-2">
+                                            <button
+                                                onClick={() => setArchivingMembers(null)}
+                                                className="flex-1 py-3 bg-white border border-slate-200 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-50 transition-colors"
+                                            >
+                                                გაუქმება
+                                            </button>
+                                            <button
+                                                onClick={executeArchiveAndDelete}
+                                                className="flex-1 py-3 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 shadow-lg shadow-slate-900/20 transition-all flex items-center justify-center"
+                                            >
+                                                <Save size={14} className="mr-2" />
+                                                დარეზერვება & წაშლა
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Reserved / Migrations Section */}
+                            {reservedMembers.length > 0 && (
+                                <div className="bg-white p-6 rounded-[2.5rem] border border-orange-100 shadow-sm space-y-4 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-bl-[100px] -z-0 opacity-50"></div>
+
+                                    <div className="relative z-10 flex items-center justify-between">
+                                        <h4 className="font-black text-slate-800 flex items-center text-sm uppercase">
+                                            <Activity size={18} className="mr-2 text-orange-500" />
+                                            მიგრაციის სია
+                                            <span className="ml-3 px-2 py-0.5 bg-orange-100 text-orange-600 rounded-lg text-[10px] font-bold">
+                                                {reservedMembers.length}
+                                            </span>
+                                        </h4>
+                                        <div className="flex items-center gap-2">
+                                            {selectedReservedMemberIds.length > 0 && (
+                                                <button
+                                                    onClick={() => setIsReassignModalOpen(true)}
+                                                    className="text-[10px] font-bold text-white bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded-lg transition-colors shadow-lg shadow-indigo-500/20 animate-scaleIn"
+                                                >
+                                                    არჩეულების მართვა ({selectedReservedMemberIds.length})
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={toggleSelectAllReserved}
+                                                className="text-[10px] font-bold text-slate-500 hover:text-slate-700 bg-slate-100 px-3 py-1.5 rounded-lg transition-colors"
+                                            >
+                                                {selectedReservedMemberIds.length === reservedMembers.length ? 'მონიშვნის მოხსნა' : 'ყველას მონიშვნა'}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <p className="relative z-10 text-[11px] text-slate-500 font-medium">
+                                        მომხმარებლები, რომლებსაც ესაჭიროებათ ახალი დონის მინიჭება (ყოფილი წევრები)
+                                    </p>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+                                        {reservedMembers.map((member, i) => {
+                                            const isSelected = selectedReservedMemberIds.includes(member.id.toString());
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    onClick={() => toggleSelectReservedMember(member.id.toString())}
+                                                    className={`cursor-pointer p-3 rounded-2xl border flex items-center justify-between group transition-all ${isSelected ? 'bg-indigo-50 border-indigo-200 ring-1 ring-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-100 hover:border-orange-200'}`}
+                                                >
+                                                    <div className="flex items-center">
+                                                        <div className={`w-4 h-4 rounded-md border mr-3 flex items-center justify-center transition-colors ${isSelected ? 'bg-indigo-500 border-indigo-500' : 'bg-white border-slate-300'}`}>
+                                                            {isSelected && <Check size={10} className="text-white" />}
+                                                        </div>
+                                                        <div className={`w-8 h-8 rounded-full shadow-sm flex items-center justify-center font-bold text-xs mr-3 ${isSelected ? 'bg-white text-indigo-500' : 'bg-white text-slate-400'}`}>
+                                                            <User size={14} />
+                                                        </div>
+                                                        <div>
+                                                            <div className={`text-[11px] font-bold ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>{member.name}</div>
+                                                            <div className="text-[9px] text-orange-400 font-bold">Ex: {member.originalRank}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Reassignment Modal */}
+                            {isReassignModalOpen && (
+                                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
+                                    <div className="bg-white p-6 rounded-[2rem] shadow-2xl max-w-sm w-full mx-4 space-y-4 animate-scaleIn">
+                                        <div className="text-center">
+                                            <h3 className="text-lg font-black text-slate-800">აირჩიეთ ახალი დონე</h3>
+                                            <p className="text-xs text-slate-500 font-medium mt-1">
+                                                თქვენ აკავშირებთ <span className="font-bold text-indigo-600">{selectedReservedMemberIds.length} მომხმარებელს</span> ახალ დონესთან.
+                                            </p>
+                                        </div>
+
+                                        <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-1">
+                                            {ranks.map(rank => (
+                                                <button
+                                                    key={rank.id}
+                                                    onClick={() => executeReassignment(rank.id)}
+                                                    className="w-full flex items-center p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-slate-50 transition-all text-left group"
+                                                >
+                                                    <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center text-slate-400 font-bold text-xs mr-3 group-hover:text-indigo-500">
+                                                        <Trophy size={14} />
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-xs font-bold text-slate-700 group-hover:text-indigo-700">{rank.name}</div>
+                                                        <div className="text-[9px] text-slate-400">Level Configured</div>
+                                                    </div>
+                                                    <ArrowRight size={14} className="ml-auto text-slate-300 group-hover:text-indigo-400" />
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            onClick={() => setIsReassignModalOpen(false)}
+                                            className="w-full py-3 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-200 transition-colors mt-2"
+                                        >
+                                            გაუქმება
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={addRank}
+                                className="w-full py-3 border-2 border-dashed border-slate-200 rounded-[2rem] text-slate-400 font-bold hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center text-sm"
+                            >
+                                <Plus size={16} className="mr-2" />
+                                დონის დამატება
+                            </button>
                         </div>
                     </div>
+                ) : (
+                    <div className="space-y-6 animate-fadeIn">
+                        <div className="flex justify-end">
+                            <button
+                                onClick={() => setShowReferralConfig(true)}
+                                className="flex items-center space-x-2 px-6 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl font-bold transition-all shadow-sm shadow-indigo-100 border border-indigo-200/50"
+                            >
+                                <Settings size={18} />
+                                <span>რეფერალ სისტემის პარამეტრები</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Referral Statistics Card */}
+                            <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm">
+                                <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center">
+                                    <Activity size={18} className="mr-2 text-indigo-500" />
+                                    წყაროების სტატისტიკა
+                                </h3>
+
+                                <div className="overflow-x-auto rounded-xl border border-slate-100">
+                                    <table className="w-full text-xs text-left min-w-full">
+                                        <thead className="bg-slate-50 text-slate-500 font-bold text-[10px] uppercase tracking-wider">
+                                            <tr>
+                                                <th className="px-2 py-2.5">არხი</th>
+                                                <th className="px-2 py-2.5 text-center">ვიზიტ.</th>
+                                                <th className="px-2 py-2.5 text-center text-slate-400">%</th>
+                                                <th className="px-2 py-2.5 text-center">წევრ.</th>
+                                                <th className="px-2 py-2.5 text-center text-slate-400">Conv.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {[
+                                                { name: 'შენიშნა ფილიალი', visitors: 1, vPercent: '33.3%', members: 6, mPercent: '12%' },
+                                                { name: 'რეკომენდაცია', visitors: 0, vPercent: '0%', members: 11, mPercent: '22%' },
+                                                { name: 'ვებგვერდი', visitors: 1, vPercent: '33.3%', members: 11, mPercent: '22%' },
+                                                { name: 'Google Maps', visitors: 0, vPercent: '0%', members: 4, mPercent: '8%' },
+                                                { name: 'სოციალური ქსელი', visitors: 0, vPercent: '0%', members: 5, mPercent: '10%' },
+                                                { name: 'საძიებო სისტემა', visitors: 0, vPercent: '0%', members: 7, mPercent: '14%' },
+                                                { name: 'ონლაინ რეკლამა', visitors: 1, vPercent: '33.3%', members: 6, mPercent: '12%' },
+                                                { name: 'მეგობარი', visitors: 0, vPercent: '0%', members: 0, mPercent: '0%' },
+                                                { name: 'სხვა', visitors: 0, vPercent: '0%', members: 0, mPercent: '0%' },
+                                            ].map((row, index) => (
+                                                <tr key={index} className="hover:bg-slate-50/50 transition-colors cursor-default group">
+                                                    <td className="px-2 py-2.5 font-bold text-slate-700 group-hover:text-indigo-600 transition-colors whitespace-nowrap text-[10px]">
+                                                        {row.name}
+                                                    </td>
+                                                    <td className="px-2 py-2.5 text-center font-bold text-slate-600 text-[10px]">{row.visitors}</td>
+                                                    <td className="px-2 py-2.5 text-center text-slate-400 text-[9px] font-medium">{row.vPercent}</td>
+                                                    <td className="px-2 py-2.5 text-center font-bold text-slate-800 bg-indigo-50/30 group-hover:bg-indigo-50 transition-colors text-[10px]">{row.members}</td>
+                                                    <td className="px-2 py-2.5 text-center text-indigo-500 font-bold text-[9px] bg-indigo-50/30 group-hover:bg-indigo-50 transition-colors">{row.mPercent}</td>
+                                                </tr>
+                                            ))}
+                                            {/* Total Row */}
+                                            <tr className="bg-slate-50/80 border-t-2 border-slate-100">
+                                                <td className="px-2 py-2.5 font-black text-slate-900 uppercase tracking-widest text-[9px]">სულ</td>
+                                                <td className="px-2 py-2.5 text-center font-black text-slate-900 text-[10px]">3</td>
+                                                <td className="px-2 py-2.5 text-center font-bold text-slate-900 text-[9px]">100%</td>
+                                                <td className="px-2 py-2.5 text-center font-black text-indigo-700 text-[10px]">50</td>
+                                                <td className="px-2 py-2.5 text-center font-bold text-indigo-700 text-[9px]">100%</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Right Column: Recent Referrals */}
+                            <div className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm h-fit">
+                                <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center">
+                                    <Users size={18} className="mr-2 text-indigo-500" />
+                                    ბოლო რეფერალები
+                                </h3>
+
+                                <div className="flex flex-col items-center justify-center py-12 text-center space-y-3">
+                                    <div className="p-4 bg-indigo-50 rounded-full text-indigo-300 mb-2">
+                                        <Users size={24} />
+                                    </div>
+                                    <p className="text-slate-500 font-bold text-sm">რეფერალები არ მოიძებნა</p>
+                                    <p className="text-slate-400 text-xs max-w-[200px]">როდესაც მომხმარებლები დარეგისტრირდებიან რეფერალური ბმულით, ისინი აქ გამოჩნდებიან.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <ReferralConfigModal isOpen={showReferralConfig} onClose={() => setShowReferralConfig(false)} />
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // --- RENDER MARKETING HUB VIEW ---
+    if (activeSubView === 'MARKETING_HUB') {
+        return (
+            <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm gap-4">
+                    <button onClick={() => setActiveSubView('MAIN')} className="flex items-center text-slate-500 hover:text-slate-800 font-bold transition-all group">
+                        <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
+                        პარამეტრებში დაბრუნება
+                    </button>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-rose-500 rounded-2xl text-white shadow-lg shadow-rose-500/20">
+                            <Megaphone size={24} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">მარკეტინგის ცენტრი</h2>
+                    </div>
+                    <div className="w-24"></div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                    {/* 1. Rating & Referral */}
+                    <button
+                        onClick={() => setActiveSubView('RATING')}
+                        className="group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-yellow-200 hover:shadow-xl hover:shadow-yellow-500/5 transition-all duration-300 hover:-translate-y-1 text-left ring-1 ring-slate-100"
+                    >
+                        <div className="w-14 h-14 bg-yellow-50 text-yellow-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                            <Star size={28} />
+                        </div>
+                        <h3 className="text-lg font-black text-slate-800 mb-2">რეიტინგი და რეფერალები</h3>
+                        <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
+                            რეიტინგის სისტემის და რეფერალური პროგრამის მართვა
+                        </p>
+                        <div className="flex items-center text-yellow-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                            <span>მართვა</span>
+                            <ArrowRight size={14} className="ml-2" />
+                        </div>
+                    </button>
+
+
+                </div>
+            </div>
+        );
+    }
+
+    // --- RENDER COMMUNICATION VIEW ---
+    if (activeSubView === 'COMMUNICATION') {
+        return (
+            <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm gap-4">
+                    <button onClick={() => setActiveSubView('MARKETING_HUB')} className="flex items-center text-slate-500 hover:text-slate-800 font-bold transition-all group">
+                        <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
+                        მარკეტინგში დაბრუნება
+                    </button>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-sky-500 rounded-2xl text-white shadow-lg shadow-sky-500/20">
+                            <MessageSquare size={24} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">კომუნიკაცია მომხმარებელთან</h2>
+                    </div>
+                    <div className="w-24"></div>
+                </div>
+                <div className="bg-white p-12 rounded-[3rem] border border-slate-100 text-center text-slate-400">
+                    <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-bold mb-2">მოდული დამუშავების პროცესშია</h3>
+                    <p className="text-xs">აქ განთავსდება SMS და Email კომუნიკაციის პარამეტრები</p>
+                </div>
+            </div>
+        );
+    }
+
+    // --- RENDER PROMOTIONS VIEW ---
+    if (activeSubView === 'PROMOTIONS') {
+        return (
+            <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm gap-4">
+                    <button onClick={() => setActiveSubView('MARKETING_HUB')} className="flex items-center text-slate-500 hover:text-slate-800 font-bold transition-all group">
+                        <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
+                        მარკეტინგში დაბრუნება
+                    </button>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-pink-500 rounded-2xl text-white shadow-lg shadow-pink-500/20">
+                            <Megaphone size={24} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">პრომოციების მართვა</h2>
+                    </div>
+                    <div className="w-24"></div>
+                </div>
+                <div className="bg-white p-12 rounded-[3rem] border border-slate-100 text-center text-slate-400">
+                    <Megaphone size={48} className="mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-bold mb-2">მოდული დამუშავების პროცესშია</h3>
+                    <p className="text-xs">აქ განთავსდება ფასდაკლებების და კუპონების სისტემა</p>
+                </div>
+            </div>
+        );
+    }
+
+    // --- RENDER CORPORATE VIEW ---
+    if (activeSubView === 'CORPORATE') {
+        return (
+            <div className="max-w-6xl mx-auto space-y-8 animate-fadeIn pb-24 relative">
+                <div className="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm gap-4">
+                    <button onClick={() => setActiveSubView('MARKETING_HUB')} className="flex items-center text-slate-500 hover:text-slate-800 font-bold transition-all group">
+                        <ArrowLeft size={20} className="mr-2 group-hover:-translate-x-1 transition-transform" />
+                        მარკეტინგში დაბრუნება
+                    </button>
+                    <div className="flex items-center space-x-3">
+                        <div className="p-2.5 bg-indigo-500 rounded-2xl text-white shadow-lg shadow-indigo-500/20">
+                            <Handshake size={24} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight">კორპორატიული პარტნიორები</h2>
+                    </div>
+                    <div className="w-24"></div>
+                </div>
+                <div className="bg-white p-12 rounded-[3rem] border border-slate-100 text-center text-slate-400">
+                    <Handshake size={48} className="mx-auto mb-4 opacity-50" />
+                    <h3 className="text-lg font-bold mb-2">მოდული დამუშავების პროცესშია</h3>
+                    <p className="text-xs">აქ განთავსდება კორპორატიული კლიენტების და პარტნიორების მართვის პანელი</p>
                 </div>
             </div>
         );
@@ -3296,41 +4420,12 @@ export default function SettingsPage() {
                 </div>
             </header>
 
-            {/* Profile Completion Progress Bar */}
-            <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-xl shadow-slate-900/20">
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div className="space-y-2">
-                        <div className="flex items-center space-x-3">
-                            <div className="p-2 bg-emerald-500 rounded-lg text-white shadow-lg shadow-emerald-500/30">
-                                <Activity size={20} />
-                            </div>
-                            <h3 className="text-xl font-black tracking-tight">სისტემის მზაობა</h3>
-                        </div>
-                        <p className="text-slate-400 text-sm font-medium">შეავსეთ ყველა სავალდებულო ველი სისტემის გასაშვებად</p>
-                    </div>
-
-                    <div className="flex-1 max-w-md w-full">
-                        <div className="flex justify-between items-end mb-2">
-                            <span className="text-xs font-bold uppercase text-emerald-400 tracking-wider">
-                                {completionStats.completed} / {completionStats.total} ეტაპი დასრულებულია
-                            </span>
-                            <span className="text-2xl font-black">{completionStats.percentage}%</span>
-                        </div>
-                        <div className="h-4 w-full bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
-                            <div
-                                className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000 ease-out relative"
-                                style={{ width: `${completionStats.percentage}%` }}
-                            >
-                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-40 h-40 bg-indigo-500/10 blur-[60px] rounded-full pointer-events-none"></div>
-            </div>
+            {/* Symbiosis System Visualization */}
+            <Symbiosis
+                onboardingStep={onboardingStep}
+                completionPercentage={completionStats.percentage}
+                onNodeClick={setActiveSubView}
+            />
 
             {/* Main Navigation Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -3504,6 +4599,24 @@ export default function SettingsPage() {
                         </div>
                     )}
                     <div className="flex items-center text-blue-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
+                        <span>მართვა</span>
+                        <ArrowRight size={14} className="ml-2" />
+                    </div>
+                </button>
+
+                {/* Marketing Hub Card */}
+                <button
+                    onClick={() => setActiveSubView('MARKETING_HUB')}
+                    className="group relative p-8 bg-white border border-slate-100 rounded-[2.5rem] hover:border-rose-200 hover:shadow-xl hover:shadow-rose-500/5 transition-all duration-300 hover:-translate-y-1 text-left"
+                >
+                    <div className="w-14 h-14 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                        <Megaphone size={28} />
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 mb-2">რეიტინგი/რეფერალები</h3>
+                    <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed">
+                        რეიტინგი, კომუნიკაცია, პრომოციები და პარტნიორები
+                    </p>
+                    <div className="flex items-center text-rose-500 text-xs font-bold uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
                         <span>მართვა</span>
                         <ArrowRight size={14} className="ml-2" />
                     </div>

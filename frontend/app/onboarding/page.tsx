@@ -13,8 +13,14 @@ import {
   ArrowRight,
   Clock,
   Lock,
-  ShieldAlert
+  ShieldAlert,
+  Calendar,
+  X,
+  ChevronRight,
+  ChevronLeft
 } from 'lucide-react';
+import { format, addDays, startOfToday, isSameDay } from 'date-fns';
+import { enUS, ka } from 'date-fns/locale';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -25,10 +31,54 @@ export default function OnboardingPage() {
   const [hasGeneralManager, setHasGeneralManager] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
+  // Interview Modal State
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [interviewDate, setInterviewDate] = useState<Date | null>(null);
+  const [interviewTime, setInterviewTime] = useState<string | null>(null);
+  const [activeDateIndex, setActiveDateIndex] = useState(0);
+
+  const today = startOfToday();
+  const availableDates = Array.from({ length: 14 }).map((_, i) => addDays(today, i));
+  const availableTimes = ['10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'];
+
+  // Scroll function for dates
+  const handleNextDates = () => {
+    if (activeDateIndex + 5 < availableDates.length) setActiveDateIndex(activeDateIndex + 1);
+  };
+  const handlePrevDates = () => {
+    if (activeDateIndex > 0) setActiveDateIndex(activeDateIndex - 1);
+  };
+
+  const visibleDates = availableDates.slice(activeDateIndex, activeDateIndex + 5);
+
+  const confirmInterview = () => {
+    if (interviewDate && interviewTime) {
+      // Combine date and time
+      const [hours, minutes] = interviewTime.split(':').map(Number);
+      const combinedDate = new Date(interviewDate);
+      combinedDate.setHours(hours, minutes);
+
+      setCompany(prev => ({ ...prev, interviewDate: combinedDate.toISOString() }));
+      setPermissionGranted(true);
+      setShowInterviewModal(false);
+    }
+  };
+
+  const handleGrantPermission = () => {
+    if (permissionGranted) {
+      setPermissionGranted(false);
+      setCompany(prev => ({ ...prev, interviewDate: undefined }));
+    } else {
+      setShowInterviewModal(true);
+      // Default to today if not set
+      if (!interviewDate) setInterviewDate(today);
+    }
+  };
+
   const [company, setCompany] = useState({
-    name: '', identCode: '', legalAddress: '', actualAddress: '', directorName: '', directorId: '',
+    name: '', identCode: '', country: '', city: '', legalAddress: '', actualAddress: '', directorFirstName: '', directorLastName: '', directorId: '',
     directorPhone: '', directorEmail: '', activityField: '', brandName: '', logo: null as string | null,
-    gmName: '', gmId: '', gmPhone: '', gmEmail: ''
+    gmName: '', gmId: '', gmPhone: '', gmEmail: '', interviewDate: undefined as string | undefined
   });
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -56,7 +106,7 @@ export default function OnboardingPage() {
       const payload = { ...company };
       // Map Director info to GM info if no separate GM is specified
       if (!hasGeneralManager) {
-        payload.gmName = company.directorName;
+        payload.gmName = `${company.directorFirstName} ${company.directorLastName}`;
         payload.gmEmail = company.directorEmail;
         payload.gmPhone = company.directorPhone;
         // gmId is not strictly required by schema but good to have consistency if needed, 
@@ -122,6 +172,108 @@ export default function OnboardingPage() {
     );
   }
 
+  // Interview Modal Component
+  const InterviewModal = () => {
+    if (!showInterviewModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fadeIn">
+        <div className="bg-[#161b22] w-full max-w-2xl rounded-[3rem] border border-slate-800 shadow-2xl overflow-hidden relative">
+          {/* Close Button */}
+          <button
+            onClick={() => setShowInterviewModal(false)}
+            className="absolute top-6 right-6 p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white hover:bg-red-500/20 hover:border-red-500/50 border border-transparent transition-all"
+          >
+            <X size={20} />
+          </button>
+
+          <div className="p-10 space-y-8">
+            {/* Header */}
+            <div className="flex items-center space-x-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-500/20">
+                AS
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-1">დაჯავშნეთ გასაუბრება</p>
+                <h3 className="text-2xl font-black text-white">Artron Support Team</h3>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Calendar Strip */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-end mb-2">
+                  <span className="text-sm font-bold text-slate-400">აირჩიეთ დღე</span>
+                  <div className="flex space-x-2">
+                    <button onClick={handlePrevDates} disabled={activeDateIndex === 0} className="p-1.5 rounded-lg bg-slate-800 text-slate-400 disabled:opacity-30 hover:text-white transition-colors"><ChevronLeft size={16} /></button>
+                    <button onClick={handleNextDates} disabled={activeDateIndex + 5 >= availableDates.length} className="p-1.5 rounded-lg bg-slate-800 text-slate-400 disabled:opacity-30 hover:text-white transition-colors"><ChevronRight size={16} /></button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-5 gap-3">
+                  {visibleDates.map((date, idx) => {
+                    const isSelected = interviewDate && isSameDay(date, interviewDate);
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setInterviewDate(date)}
+                        className={`flex flex-col items-center justify-center py-4 rounded-2xl border transition-all ${isSelected
+                          ? 'bg-lime-400 border-lime-400 text-slate-900 shadow-lg shadow-lime-400/20 scale-105'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
+                          }`}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-widest mb-1 opacity-70">
+                          {format(date, 'EEE', { locale: ka })}
+                        </span>
+                        <span className="text-xl font-black">
+                          {format(date, 'd')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Time Slots */}
+              <div className="space-y-3 pt-4 border-t border-slate-800/50">
+                <span className="text-sm font-bold text-slate-400 block mb-2">აირჩიეთ საათი</span>
+                <div className="grid grid-cols-4 gap-3">
+                  {availableTimes.map((time) => (
+                    <button
+                      key={time}
+                      type="button"
+                      onClick={() => setInterviewTime(time)}
+                      className={`py-2.5 rounded-xl text-sm font-bold transition-all ${interviewTime === time
+                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
+                        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                        }`}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center pt-4 text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                <Clock size={14} className="mr-2" />
+                30 წუთიანი ონლაინ შეხვედრა • Google Meet
+              </div>
+
+              <button
+                type="button"
+                onClick={confirmInterview}
+                disabled={!interviewDate || !interviewTime}
+                className="w-full py-4 bg-white text-slate-900 font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-lime-400 transition-all shadow-xl active:scale-95 disabled:bg-slate-800 disabled:text-slate-600 disabled:shadow-none mt-4"
+              >
+                დაჯავშნა და დადასტურება
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-slate-300 font-sans p-10 flex items-center justify-center">
       <div className="w-full max-w-5xl bg-[#161b22] rounded-[3.5rem] shadow-2xl border border-slate-800 overflow-hidden animate-fadeIn">
@@ -146,6 +298,8 @@ export default function OnboardingPage() {
               </div>
             </div>
           </div>
+
+          <InterviewModal />
 
           <form onSubmit={handleSubmitRequest} className="space-y-12">
 
@@ -263,7 +417,10 @@ export default function OnboardingPage() {
                   <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-800 space-y-6">
                     <h3 className="text-sm font-black text-white flex items-center"><UserCheck size={18} className="mr-2 text-blue-500" /> დირექტორი</h3>
                     <div className="space-y-4">
-                      <input value={company.directorName} onChange={e => setCompany({ ...company, directorName: e.target.value })} placeholder="სახელი გვარი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input value={company.directorFirstName} onChange={e => setCompany({ ...company, directorFirstName: e.target.value })} placeholder="სახელი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                        <input value={company.directorLastName} onChange={e => setCompany({ ...company, directorLastName: e.target.value })} placeholder="გვარი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                      </div>
                       <input value={company.directorId} onChange={e => setCompany({ ...company, directorId: e.target.value })} placeholder="პირადი ნომერი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                       <input value={company.directorPhone} onChange={e => setCompany({ ...company, directorPhone: e.target.value })} placeholder="პირადი მობილური" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                       <input value={company.directorEmail} onChange={e => setCompany({ ...company, directorEmail: e.target.value })} placeholder="პირადი მეილი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
@@ -272,6 +429,10 @@ export default function OnboardingPage() {
                   <div className="bg-slate-900/50 p-8 rounded-[2.5rem] border border-slate-800 space-y-6 text-left">
                     <h3 className="text-sm font-black text-white flex items-center"><MapPin size={18} className="mr-2 text-blue-500" /> ლოკაცია</h3>
                     <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <input value={company.country} onChange={e => setCompany({ ...company, country: e.target.value })} placeholder="ქვეყანა" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                        <input value={company.city} onChange={e => setCompany({ ...company, city: e.target.value })} placeholder="ქალაქი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
+                      </div>
                       <input value={company.legalAddress} onChange={e => setCompany({ ...company, legalAddress: e.target.value })} placeholder="იურიდიული მისამართი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-bold" />
                       <input value={company.identCode} onChange={e => setCompany({ ...company, identCode: e.target.value })} placeholder="ს/კოდი" className="w-full px-5 py-3 bg-[#0d1117] border border-slate-800 rounded-xl outline-none font-mono font-bold" />
                     </div>
@@ -296,7 +457,7 @@ export default function OnboardingPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setPermissionGranted(!permissionGranted)}
+                          onClick={() => handleGrantPermission()}
                           className={`px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest transition-all ${permissionGranted ? 'bg-lime-400 text-slate-900 shadow-2xl' : 'bg-slate-800 text-slate-500 border border-slate-700 hover:text-white'}`}
                         >
                           {permissionGranted ? 'მოთხოვნა გააქტიურებულია' : 'ნებართვის მიცემა'}

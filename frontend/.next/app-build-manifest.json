@@ -31,35 +31,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/(main)/settings/page.js"
     ],
-    "/(main)/users/page": [
+    "/(main)/pos/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(main)/users/page.js"
-    ],
-    "/(main)/users/add/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/users/add/page.js"
-    ],
-    "/(main)/market/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/market/page.js"
-    ],
-    "/(main)/employees/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/employees/page.js"
-    ],
-    "/(main)/promotions/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/promotions/page.js"
-    ],
-    "/(main)/statistics/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(main)/statistics/page.js"
+      "static/chunks/app/(main)/pos/page.js"
     ]
   }
 }

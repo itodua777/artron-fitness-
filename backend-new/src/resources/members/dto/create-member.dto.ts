@@ -35,4 +35,8 @@ export class CreateMemberDto {
     // Medical
     healthCert?: string;
     birthCert?: string;
+    bloodGroup?: string;
+    isPwd?: boolean;
+    clothingSize?: string;
+    source?: string;
 }

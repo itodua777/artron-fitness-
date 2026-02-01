@@ -12,9 +12,12 @@ model Company {
   name        String
   identCode   String?
   legalAddress String?
+  country      String?
+  city         String?
   activityField String?
   brandName   String?
   logo        String? // Base64 or URL
+  interviewDate DateTime?
   
   updatedAt   DateTime @updatedAt
   branches  Branch[]
@@ -129,6 +132,10 @@ model Member {
   // Medical
   healthCert     String? // URL
   birthCert      String? // URL
+  bloodGroup     String? // 1-Unknown, 2-O+, etc.
+  isPwd          Boolean @default(false)
+  clothingSize   String? // XS, S, M, L, XL, XXL
+  source         String? // How they heard about us
 
   // Relations
   branchId  String
@@ -165,4 +172,80 @@ model Pass {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Supplier {
+  id            String   @id @default(uuid())
+  name          String
+  contactPerson String?
+  phone         String?
+  category      String?
+  status        String   @default("Active")
+  
+  warehouseItems WarehouseItem[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model WarehouseItem {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   // GROCERY, MATERIAL, ACCESSORY, SUPPLIER (for older logic, but Supplier is separate now)
+                         // Actually the frontend sends 'GROCERY', 'MATERIAL', 'ACCESSORY' as 'category' payload field for Item, 
+                         // but for Supplier it calls a different endpoint or same with type?
+                         // Frontend calls POST /api/warehouse with payload. 
+                         // Handler in frontend separates them.
+  
+  // Common
+  quantity    Int      @default(0)
+  price       Decimal? @db.Decimal(10, 2)
+  
+  // Grocery
+  weight      String?
+  unit        String?
+  
+  // Material
+  condition   String?
+  note        String?
+  
+  // Relations
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+  deliveryDate DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  productIngredients ProductIngredient[]
+}
+
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  totalCost   Decimal? @db.Decimal(10, 2)
+  
+  ingredients ProductIngredient[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProductIngredient {
+  id              String   @id @default(uuid())
+  
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  warehouseItemId String
+  warehouseItem   WarehouseItem @relation(fields: [warehouseItemId], references: [id])
+  
+  quantity        Decimal  @db.Decimal(10, 3)
+  unit            String
+  
+  calculatedCost  Decimal  @db.Decimal(10, 2)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
